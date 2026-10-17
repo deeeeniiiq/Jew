@@ -14,6 +14,7 @@ from app.models.api import GraphExportPackage, ObsidianExportOptions, ObsidianGr
 from app.models.domain import Artifact, ChatMessage, CreateGraphRequest, Edge, GraphChatThread, GraphProposal, GraphSummary, PatchOperation, QuizAttempt, ResourceLink, TopicQuizSession, SnapshotRecord, StudyGraph, Topic, UpdateWorkspaceConfigRequest, WorkspaceDocument, WorkspaceEnvelope, Zone
 from app.services.obsidian_export import build_obsidian_export_package
 from app.services.repository_config import apply_workspace_config_update
+from app.services.proposal_validator import prerequisites_are_acyclic
 from app.services.repository_storage import (
     ensure_seed_snapshot,
     init_repository_storage,
@@ -412,6 +413,8 @@ class GraphRepository:
             graph.topics = list(topic_map.values())
             graph.edges = list(edge_map.values())
             graph.zones = list(zone_map.values())
+            if not prerequisites_are_acyclic(graph.edges):
+                raise ValueError("prerequisite relations must not contain self-dependencies or directed cycles")
             graph.version += 1
             workspace.active_graph_id = graph.graph_id
             snapshot_id = self._insert_snapshot(conn, workspace, source="proposal.apply", reason=proposal.summary, parent_snapshot_id=current.snapshot.id)

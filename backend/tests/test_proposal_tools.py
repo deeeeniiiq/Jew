@@ -1,7 +1,7 @@
 import unittest
 from uuid import uuid4
 from app.agent.contracts import ProposalDraft, tool_specs
-from app.models.domain import ChatMessage, CreateGraphRequest, Edge, GraphProposalEnvelope, StudyGraph, Topic, UpdateWorkspaceConfigRequest
+from app.models.domain import ChatMessage, CreateGraphRequest, Edge, GraphProposal, GraphProposalEnvelope, StudyGraph, Topic, UpdateWorkspaceConfigRequest
 from app.services.proposal_normalizer import ProposalNormalizer
 from app.services.proposal_service import ProposalService
 from app.services.repository import ProposalConflictError, RepositoryConflictError
@@ -131,6 +131,68 @@ class ProposalToolTests(unittest.TestCase):
         plan = ProposalNormalizer().normalize(envelope, graph)
         self.assertFalse(plan.validation.ok)
         self.assertIn("disconnected", "; ".join(plan.validation.errors))
+
+    def test_self_and_transitive_prerequisite_cycles_fail_before_review_and_apply(self):
+        for source in ("arithmetics", "algebra-basics", "functions"):
+            with self.subTest(source=source):
+                operation = {"op_id": "cycle", "op": "upsert_edge", "entity_kind": "edge",
+                    "edge": {"id": "cycle", "source_topic_id": source,
+                             "target_topic_id": "arithmetics", "relation": "requires"}}
+                draft = ProposalDraft.model_validate({"base_graph_version": self.repo.graph(self.graph_id).version,
+                    "summary": "Invalid prerequisite", "operations": [operation]})
+                before = self.repo.current().snapshot.id
+                with self.assertRaisesRegex(ValueError, "self-dependencies or directed cycles"):
+                    self.prepare(draft)
+                envelope = GraphProposalEnvelope(graph_id=self.graph_id, mode="expand_goal",
+                    proposal_id=f"cycle-{source}", base_graph_version=draft.base_graph_version,
+                    operations=[operation])
+                response = self.client.post(self.url, json=envelope.model_dump(mode="json"))
+                self.assertEqual(response.status_code, 400, response.text)
+                self.assertEqual(self.repo.current().snapshot.id, before)
+                self.assertTrue(self.runtime.repository.graph(self.graph_id).topics)
+
+    def test_cycle_entirely_inside_new_topics_is_rejected(self):
+        draft = self.draft()
+        for name in ("new-a", "new-b"):
+            draft.operations.append(type(draft.operations[0]).model_validate({
+                "op_id": name, "op": "upsert_topic", "entity_kind": "topic",
+                "topic": {"id": name, "title": name, "slug": name}}))
+        for source, target in (("arithmetics", "new-a"), ("new-a", "new-b"), ("new-b", "new-a")):
+            draft.operations.append(type(draft.operations[0]).model_validate({
+                "op_id": source + target, "op": "upsert_edge", "entity_kind": "edge",
+                "edge": {"id": source + target, "source_topic_id": source, "target_topic_id": target}}))
+        with self.assertRaisesRegex(ValueError, "directed cycles"):
+            self.prepare(draft)
+
+    def test_supports_bridges_and_final_edge_replacements_do_not_create_prerequisite_cycles(self):
+        graph = StudyGraph(graph_id="pair", subject="test", title="Pair",
+            topics=[Topic(id=name, slug=name, title=name) for name in ("a", "b")],
+            edges=[Edge(id="ab", source_topic_id="a", target_topic_id="b")])
+        for relation in ("supports", "bridges"):
+            envelope = GraphProposalEnvelope(graph_id=graph.graph_id, mode="expand_goal", operations=[{
+                "op_id": "back", "op": "upsert_edge", "entity_kind": "edge",
+                "edge": {"id": "ba", "source_topic_id": "b", "target_topic_id": "a", "relation": relation}}])
+            self.assertTrue(ProposalNormalizer().normalize(envelope, graph).validation.ok)
+        envelope.operations[0].edge.relation = "requires"
+        envelope.operations.append(type(envelope.operations[0]).model_validate({
+            "op_id": "replace", "op": "upsert_edge", "entity_kind": "edge",
+            "edge": {"id": "ab", "source_topic_id": "a", "target_topic_id": "b", "relation": "supports"}}))
+        self.assertTrue(ProposalNormalizer().normalize(envelope, graph).validation.ok)
+
+    def test_repository_rejects_cycles_without_writing_snapshot_or_receipt(self):
+        self.repo.apply_proposal(self.prepare().apply_plan.normalized_proposal)
+        graph = self.repo.graph(self.graph_id)
+        proposal = GraphProposal(graph_id=self.graph_id, proposal_id="bypassed-validation",
+            base_graph_version=graph.version, user_prompt="", summary="Invalid", assistant_message="",
+            operations=[{"op": "upsert_edge", "edge": {"id": "self", "source_topic_id": "arithmetics",
+                                                          "target_topic_id": "arithmetics"}}])
+        before = self.repo.current().snapshot.id
+        with self.assertRaisesRegex(ValueError, "self-dependencies"):
+            self.repo.apply_proposal(proposal)
+        self.assertEqual(self.repo.current().snapshot.id, before)
+        with self.repo._connect() as conn:
+            self.assertIsNone(conn.execute("SELECT 1 FROM proposal_applications WHERE proposal_id = ?",
+                                          (proposal.proposal_id,)).fetchone())
 
     def test_apply_rejects_extra_payload_instead_of_counting_phantom_topic(self):
         proposal = self.prepare().proposal_envelope.model_dump(mode="json")

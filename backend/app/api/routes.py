@@ -327,10 +327,11 @@ async def start_topic_quiz(
         topic = next((item for item in graph.topics if item.id == topic_id), None)
         if topic is None:
             raise KeyError(topic_id)
+        question_count = request.question_count or repository.current().workspace.config.quiz_question_count
         session = repository.latest_quiz_session_for_topic(graph_id, topic_id)
-        if session is None:
+        if session is None or session.question_count != question_count:
             session = await runtime.generate_closure_quiz(
-                graph_id, topic_id, request.question_count or topic.quiz_policy.question_count, request.model,
+                graph_id, topic_id, question_count, request.model,
             )
         return QuizStartResponse(session=public_quiz(session)).model_dump(mode="json")
     except KeyError as exc:
@@ -365,7 +366,9 @@ def submit_topic_quiz(
     if len(answers) != len(request.answers):
         raise HTTPException(status_code=400, detail="A quiz question may only be answered once.")
     try:
-        attempt, _, awarded_state, reviews = quiz_service.grade_session(graph, session, answers)
+        attempt, _, awarded_state, reviews = quiz_service.grade_session(
+            graph, session, answers, pass_threshold=repository.current().workspace.config.pass_threshold,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     workspace = repository.record_quiz_attempt(graph_id, attempt, awarded_state,

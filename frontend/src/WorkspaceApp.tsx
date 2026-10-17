@@ -1,5 +1,5 @@
 import type { ChatGPTAccountController } from "./hooks/useChatGPTAccount";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { AppDialogs } from "./components/AppDialogs";
 import { DebugLogsModal } from "./components/DebugLogsModal";
@@ -187,6 +187,7 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
   const importObsidianFolderInputRef = useRef<HTMLInputElement | null>(null);
   const quizModalRef = useRef<HTMLDivElement | null>(null);
   const quizCloseButtonRef = useRef<HTMLButtonElement | null>(null);
+  const quizRequestRef = useRef(0);
   const chatViewportRef = useRef<HTMLDivElement | null>(null);
   const chatComposerRef = useRef<HTMLTextAreaElement | null>(null);
   const sessionListRef = useRef<HTMLDivElement | null>(null);
@@ -256,6 +257,8 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
     setExportGraphError(null);
   }, []);
   const closeQuizModal = useCallback(() => {
+    quizRequestRef.current += 1;
+    setQuizLoading(false);
     setQuizSession(null);
     setQuizError(null);
   }, []);
@@ -378,9 +381,16 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
     handleSelectedTopicAnchorChange,
     handleSelectTopic,
   } = useTopicPopover({ activeGraph, isMobileViewport, graphShellRef });
-  useEffect(() => {
+  useLayoutEffect(() => {
+    quizRequestRef.current += 1;
+    setQuizLoading(false);
+    setQuizSession((session) => session && session.graph_id === activeGraph?.graph_id && session.topic_id === selectedTopicId ? session : null);
+    setQuizAnswers({});
+    setQuizReviews(null);
+    setQuizError(null);
     setQuizSuccess(null);
-  }, [selectedTopicId]);
+    return () => { quizRequestRef.current += 1; };
+  }, [activeGraph?.graph_id, selectedTopicId]);
 
   useEffect(() => {
     setApplyError(null);
@@ -945,6 +955,7 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
 
   async function startQuiz(): Promise<void> {
     if (!activeGraph || !selectedTopic) return;
+    const requestId = ++quizRequestRef.current;
     setQuizLoading(true);
     setQuizError(null);
     setQuizSuccess(null);
@@ -959,12 +970,14 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
         throw new Error(await readErrorMessage(response, copy.errors.startQuiz));
       }
       const payload = (await response.json()) as QuizStartResponse;
+      if (requestId !== quizRequestRef.current) return;
       setQuizSession(payload.session);
       setQuizAnswers({});
     } catch (quizLoadError) {
+      if (requestId !== quizRequestRef.current) return;
       setQuizError(quizLoadError instanceof Error ? quizLoadError.message : copy.errors.startQuiz);
     } finally {
-      setQuizLoading(false);
+      if (requestId === quizRequestRef.current) setQuizLoading(false);
     }
   }
 
@@ -1025,12 +1038,13 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
   }
 
   async function submitQuiz(): Promise<void> {
-    if (!activeGraph || !selectedTopic || !quizSession) return;
+    if (!quizSession) return;
+    const requestId = ++quizRequestRef.current;
     setQuizLoading(true);
     setQuizError(null);
     setQuizSuccess(null);
     try {
-      const response = await apiFetch(`${API_BASE}/api/v1/graphs/${activeGraph.graph_id}/topics/${selectedTopic.id}/quiz/submit`, {
+      const response = await apiFetch(`${API_BASE}/api/v1/graphs/${quizSession.graph_id}/topics/${quizSession.topic_id}/quiz/submit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1045,7 +1059,8 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
         throw new Error(await readErrorMessage(response, copy.errors.submitQuiz));
       }
       const payload = (await response.json()) as QuizSubmitResponse;
-      setData(payload.workspace);
+      setData((current) => !current || payload.workspace.snapshot.id >= current.snapshot.id ? payload.workspace : current);
+      if (requestId !== quizRequestRef.current) return;
       void loadSnapshots();
       setQuizAnswers({});
       setQuizReviews(payload.reviews);
@@ -1053,9 +1068,10 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
         setQuizSuccess(copy.quiz.correct);
       }
     } catch (quizSubmitError) {
+      if (requestId !== quizRequestRef.current) return;
       setQuizError(quizSubmitError instanceof Error ? quizSubmitError.message : copy.errors.submitQuiz);
     } finally {
-      setQuizLoading(false);
+      if (requestId === quizRequestRef.current) setQuizLoading(false);
     }
   }
 
@@ -1319,7 +1335,15 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
           agentControls: {
             answer: answerInteraction, stop: stopChat, reconnect: reconnectChat,
             authenticated: !!chatgpt.account?.authenticated && !!chatgpt.account?.sharing, connect: () => setSettingsOpen(true),
-            openQuiz: (session) => { setSelectedTopicId(session.topic_id); setQuizSession(session); setQuizAnswers({}); setQuizReviews(null); setQuizError(null); },
+            openQuiz: (session) => {
+              quizRequestRef.current += 1;
+              setQuizLoading(false);
+              setSelectedTopicId(session.topic_id);
+              setQuizSession(session);
+              setQuizAnswers({});
+              setQuizReviews(null);
+              setQuizError(null);
+            },
           },
           assistantResizing,
           handleAssistantResize,

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from collections import deque
+from collections.abc import Iterable
 from urllib.parse import urlparse
 
-from app.models.domain import ApplyValidation, GraphProposalEnvelope, StudyGraph
+from app.models.domain import ApplyValidation, Edge, GraphProposalEnvelope, ProposalEdge, StudyGraph
 
 
 ALLOWED_PROPOSAL_OPERATIONS = {
@@ -11,6 +12,31 @@ ALLOWED_PROPOSAL_OPERATIONS = {
     "upsert_edge",
     "upsert_zone",
 }
+
+
+def prerequisites_are_acyclic(edges: Iterable[Edge | ProposalEdge]) -> bool:
+    children: dict[str, set[str]] = {}
+    indegrees: dict[str, int] = {}
+    for edge in edges:
+        if edge.relation != "requires":
+            continue
+        source, target = edge.source_topic_id, edge.target_topic_id
+        children.setdefault(source, set())
+        indegrees.setdefault(source, 0)
+        indegrees.setdefault(target, 0)
+        if target not in children[source]:
+            children[source].add(target)
+            indegrees[target] += 1
+    ready = deque(topic_id for topic_id, count in indegrees.items() if count == 0)
+    visited = 0
+    while ready:
+        source = ready.popleft()
+        visited += 1
+        for target in children.get(source, ()):
+            indegrees[target] -= 1
+            if indegrees[target] == 0:
+                ready.append(target)
+    return visited == len(indegrees)
 
 
 class ProposalValidator:
@@ -86,6 +112,14 @@ class ProposalValidator:
                         "Some proposed zones only cover one topic; zones should usually represent larger learning regions."
                     )
                 continue
+
+        if not errors:
+            edges = {edge.id: edge for edge in graph.edges}
+            for operation in envelope.operations:
+                if operation.op == "upsert_edge" and operation.edge is not None:
+                    edges[operation.edge.id] = operation.edge
+            if not prerequisites_are_acyclic(edges.values()):
+                errors.append("prerequisite relations must not contain self-dependencies or directed cycles")
 
         if not errors and not self._is_connected_after_apply(graph, envelope):
             errors.append("proposal would create disconnected graph islands; link new topics through meaningful prerequisites")
