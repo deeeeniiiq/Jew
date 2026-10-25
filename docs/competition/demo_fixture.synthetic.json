@@ -1,0 +1,619 @@
+{
+  "synthetic": true,
+  "disclaimer": "Synthetic demonstration only; no measured learner outcomes.",
+  "evaluated_at": "2026-10-24T12:00:00+00:00",
+  "graph": {
+    "graph_id": "mathematics-demo",
+    "subject": "math",
+    "title": "Mathematics demo",
+    "language": "en",
+    "version": 1,
+    "generated_at": "2026-10-24T12:00:00Z",
+    "topics": [
+      {
+        "id": "arithmetics",
+        "title": "Arithmetic and number sense",
+        "slug": "arithmetics",
+        "description": "Core numeric intuition before algebra.",
+        "difficulty": 0.0,
+        "estimated_minutes": 180,
+        "level": 0,
+        "state": "solid",
+        "zones": [
+          "review-school"
+        ],
+        "resources": [
+          {
+            "id": "res-arith-khan",
+            "label": "Khan Academy",
+            "url": "https://www.khanacademy.org/math",
+            "kind": "reference"
+          }
+        ],
+        "artifacts": [],
+        "quiz_policy": {
+          "question_count": 12,
+          "pass_threshold": 0.75
+        },
+        "metadata": {}
+      },
+      {
+        "id": "angles",
+        "title": "Angles and basic constructions",
+        "slug": "angles",
+        "description": "Core angle vocabulary and diagram reading.",
+        "difficulty": 0.0,
+        "estimated_minutes": 150,
+        "level": 0,
+        "state": "solid",
+        "zones": [
+          "review-school"
+        ],
+        "resources": [],
+        "artifacts": [],
+        "quiz_policy": {
+          "question_count": 12,
+          "pass_threshold": 0.75
+        },
+        "metadata": {}
+      },
+      {
+        "id": "algebra-basics",
+        "title": "Algebra basics",
+        "slug": "algebra-basics",
+        "description": "Variables, expressions, and equations.",
+        "difficulty": 0.0,
+        "estimated_minutes": 240,
+        "level": 1,
+        "state": "needs_review",
+        "zones": [
+          "review-school"
+        ],
+        "resources": [],
+        "artifacts": [],
+        "quiz_policy": {
+          "question_count": 12,
+          "pass_threshold": 0.75
+        },
+        "metadata": {}
+      },
+      {
+        "id": "triangles",
+        "title": "Triangles",
+        "slug": "triangles",
+        "description": "Triangle properties, congruence, and similarity.",
+        "difficulty": 0.0,
+        "estimated_minutes": 260,
+        "level": 1,
+        "state": "not_started",
+        "zones": [
+          "review-school"
+        ],
+        "resources": [],
+        "artifacts": [],
+        "quiz_policy": {
+          "question_count": 12,
+          "pass_threshold": 0.75
+        },
+        "metadata": {}
+      },
+      {
+        "id": "functions",
+        "title": "Functions",
+        "slug": "functions",
+        "description": "Mappings, notation, graphs, and transformations.",
+        "difficulty": 0.0,
+        "estimated_minutes": 300,
+        "level": 2,
+        "state": "not_started",
+        "zones": [
+          "review-school"
+        ],
+        "resources": [],
+        "artifacts": [],
+        "quiz_policy": {
+          "question_count": 12,
+          "pass_threshold": 0.75
+        },
+        "metadata": {}
+      },
+      {
+        "id": "circles",
+        "title": "Circles",
+        "slug": "circles",
+        "description": "Arcs, chords, tangents, and circle power intuition.",
+        "difficulty": 0.0,
+        "estimated_minutes": 240,
+        "level": 2,
+        "state": "not_started",
+        "zones": [
+          "review-school"
+        ],
+        "resources": [],
+        "artifacts": [],
+        "quiz_policy": {
+          "question_count": 12,
+          "pass_threshold": 0.75
+        },
+        "metadata": {}
+      },
+      {
+        "id": "linear-algebra",
+        "title": "Linear algebra foundations",
+        "slug": "linear-algebra",
+        "description": "Vectors, matrices, and transformations for ML runway.",
+        "difficulty": 0.0,
+        "estimated_minutes": 420,
+        "level": 3,
+        "state": "not_started",
+        "zones": [
+          "ml-runway"
+        ],
+        "resources": [],
+        "artifacts": [],
+        "quiz_policy": {
+          "question_count": 12,
+          "pass_threshold": 0.75
+        },
+        "metadata": {}
+      },
+      {
+        "id": "vectors-geometry",
+        "title": "Vectors in geometry",
+        "slug": "vectors-geometry",
+        "description": "Bridges synthetic geometry toward analytic geometry and ML geometry.",
+        "difficulty": 0.0,
+        "estimated_minutes": 300,
+        "level": 3,
+        "state": "not_started",
+        "zones": [
+          "analytic-bridge"
+        ],
+        "resources": [],
+        "artifacts": [],
+        "quiz_policy": {
+          "question_count": 12,
+          "pass_threshold": 0.75
+        },
+        "metadata": {}
+      },
+      {
+        "id": "embeddings",
+        "title": "Embeddings",
+        "slug": "embeddings",
+        "description": "High-level ML target topic used as a future path anchor.",
+        "difficulty": 0.0,
+        "estimated_minutes": 360,
+        "level": 4,
+        "state": "not_started",
+        "zones": [
+          "ml-runway"
+        ],
+        "resources": [],
+        "artifacts": [],
+        "quiz_policy": {
+          "question_count": 12,
+          "pass_threshold": 0.75
+        },
+        "metadata": {}
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge-arith-algebra",
+        "source_topic_id": "arithmetics",
+        "target_topic_id": "algebra-basics",
+        "relation": "requires",
+        "rationale": "Arithmetic fluency supports symbolic manipulation.",
+        "weight": 1.0
+      },
+      {
+        "id": "edge-angles-triangles",
+        "source_topic_id": "angles",
+        "target_topic_id": "triangles",
+        "relation": "requires",
+        "rationale": "Triangle reasoning starts from angle fluency.",
+        "weight": 1.0
+      },
+      {
+        "id": "edge-algebra-functions",
+        "source_topic_id": "algebra-basics",
+        "target_topic_id": "functions",
+        "relation": "requires",
+        "rationale": "Functions depend on equations and symbolic expressions.",
+        "weight": 1.0
+      },
+      {
+        "id": "edge-triangles-circles",
+        "source_topic_id": "triangles",
+        "target_topic_id": "circles",
+        "relation": "supports",
+        "rationale": "Similarity and angle chasing help circle theorems.",
+        "weight": 1.0
+      },
+      {
+        "id": "edge-algebra-vectors",
+        "source_topic_id": "algebra-basics",
+        "target_topic_id": "vectors-geometry",
+        "relation": "requires",
+        "rationale": "Vector work in geometry still depends on symbolic algebra fluency.",
+        "weight": 1.0
+      },
+      {
+        "id": "edge-functions-la",
+        "source_topic_id": "functions",
+        "target_topic_id": "linear-algebra",
+        "relation": "supports",
+        "rationale": "Function intuition helps with transformations and mappings.",
+        "weight": 1.0
+      },
+      {
+        "id": "edge-circles-vectors",
+        "source_topic_id": "circles",
+        "target_topic_id": "vectors-geometry",
+        "relation": "bridges",
+        "rationale": "Diagram intuition transitions into analytic representation.",
+        "weight": 1.0
+      },
+      {
+        "id": "edge-vectors-la",
+        "source_topic_id": "vectors-geometry",
+        "target_topic_id": "linear-algebra",
+        "relation": "supports",
+        "rationale": "Geometric vector intuition strengthens the algebraic vector model.",
+        "weight": 1.0
+      },
+      {
+        "id": "edge-la-embeddings",
+        "source_topic_id": "linear-algebra",
+        "target_topic_id": "embeddings",
+        "relation": "requires",
+        "rationale": "Embeddings rely on vector spaces and linear representations.",
+        "weight": 1.0
+      },
+      {
+        "id": "edge-vectors-embeddings",
+        "source_topic_id": "vectors-geometry",
+        "target_topic_id": "embeddings",
+        "relation": "supports",
+        "rationale": "Geometric vector intuition helps embeddings feel less abstract.",
+        "weight": 1.0
+      }
+    ],
+    "zones": [
+      {
+        "id": "review-school",
+        "title": "Review",
+        "kind": "review",
+        "color": "#f2a65a",
+        "intensity": 0.55,
+        "topic_ids": [
+          "arithmetics",
+          "angles",
+          "algebra-basics",
+          "triangles",
+          "functions",
+          "circles"
+        ]
+      },
+      {
+        "id": "analytic-bridge",
+        "title": "Analytic bridge",
+        "kind": "bridge",
+        "color": "#76c7c0",
+        "intensity": 0.74,
+        "topic_ids": [
+          "circles",
+          "vectors-geometry",
+          "linear-algebra"
+        ]
+      },
+      {
+        "id": "ml-runway",
+        "title": "ML runway",
+        "kind": "goal",
+        "color": "#ff6b6b",
+        "intensity": 0.78,
+        "topic_ids": [
+          "linear-algebra",
+          "embeddings"
+        ]
+      }
+    ],
+    "quiz_attempts": [
+      {
+        "id": "synthetic-quiz-arithmetic",
+        "topic_id": "arithmetics",
+        "passed": true,
+        "score": 0.9,
+        "question_count": 10,
+        "source": "quiz",
+        "closure_awarded": true,
+        "created_at": "2026-10-10T12:00:00Z",
+        "missed_questions": [],
+        "fail_count": 0
+      },
+      {
+        "id": "synthetic-manual-angles",
+        "topic_id": "angles",
+        "passed": true,
+        "score": 1.0,
+        "question_count": 0,
+        "source": "manual",
+        "closure_awarded": false,
+        "created_at": "2026-10-11T12:00:00Z",
+        "missed_questions": [],
+        "fail_count": 0
+      },
+      {
+        "id": "synthetic-quiz-algebra",
+        "topic_id": "algebra-basics",
+        "passed": false,
+        "score": 0.4,
+        "question_count": 10,
+        "source": "quiz",
+        "closure_awarded": false,
+        "created_at": "2026-10-23T12:00:00Z",
+        "missed_questions": [],
+        "fail_count": 0
+      }
+    ],
+    "metadata": {
+      "seed": true,
+      "demo": true
+    }
+  },
+  "learning_plan": {
+    "graph_id": "mathematics-demo",
+    "graph_version": 1,
+    "evaluated_at": "2026-10-24T12:00:00Z",
+    "total_topics": 9,
+    "completed_topics": 2,
+    "certified_topics": 1,
+    "manual_only_topics": 1,
+    "due_reviews": 1,
+    "blocked_topics": 3,
+    "signals": [
+      {
+        "topic_id": "algebra-basics",
+        "evidence_level": "quiz",
+        "mastery_indicator": "practice_needed",
+        "quiz_attempts": 1,
+        "latest_quiz_score": 0.4,
+        "latest_quiz_at": "2026-10-23T12:00:00Z",
+        "failure_count": 1,
+        "blocked_prerequisite_ids": [],
+        "next_review_at": null,
+        "review_due": false
+      },
+      {
+        "topic_id": "angles",
+        "evidence_level": "manual_only",
+        "mastery_indicator": "insufficient_evidence",
+        "quiz_attempts": 0,
+        "latest_quiz_score": null,
+        "latest_quiz_at": null,
+        "failure_count": 0,
+        "blocked_prerequisite_ids": [],
+        "next_review_at": null,
+        "review_due": false
+      },
+      {
+        "topic_id": "arithmetics",
+        "evidence_level": "quiz",
+        "mastery_indicator": "quiz_passed",
+        "quiz_attempts": 1,
+        "latest_quiz_score": 0.9,
+        "latest_quiz_at": "2026-10-10T12:00:00Z",
+        "failure_count": 0,
+        "blocked_prerequisite_ids": [],
+        "next_review_at": "2026-10-12T12:00:00Z",
+        "review_due": true
+      },
+      {
+        "topic_id": "circles",
+        "evidence_level": "none",
+        "mastery_indicator": "insufficient_evidence",
+        "quiz_attempts": 0,
+        "latest_quiz_score": null,
+        "latest_quiz_at": null,
+        "failure_count": 0,
+        "blocked_prerequisite_ids": [],
+        "next_review_at": null,
+        "review_due": false
+      },
+      {
+        "topic_id": "embeddings",
+        "evidence_level": "none",
+        "mastery_indicator": "insufficient_evidence",
+        "quiz_attempts": 0,
+        "latest_quiz_score": null,
+        "latest_quiz_at": null,
+        "failure_count": 0,
+        "blocked_prerequisite_ids": [
+          "linear-algebra"
+        ],
+        "next_review_at": null,
+        "review_due": false
+      },
+      {
+        "topic_id": "functions",
+        "evidence_level": "none",
+        "mastery_indicator": "insufficient_evidence",
+        "quiz_attempts": 0,
+        "latest_quiz_score": null,
+        "latest_quiz_at": null,
+        "failure_count": 0,
+        "blocked_prerequisite_ids": [
+          "algebra-basics"
+        ],
+        "next_review_at": null,
+        "review_due": false
+      },
+      {
+        "topic_id": "linear-algebra",
+        "evidence_level": "none",
+        "mastery_indicator": "insufficient_evidence",
+        "quiz_attempts": 0,
+        "latest_quiz_score": null,
+        "latest_quiz_at": null,
+        "failure_count": 0,
+        "blocked_prerequisite_ids": [],
+        "next_review_at": null,
+        "review_due": false
+      },
+      {
+        "topic_id": "triangles",
+        "evidence_level": "none",
+        "mastery_indicator": "insufficient_evidence",
+        "quiz_attempts": 0,
+        "latest_quiz_score": null,
+        "latest_quiz_at": null,
+        "failure_count": 0,
+        "blocked_prerequisite_ids": [],
+        "next_review_at": null,
+        "review_due": false
+      },
+      {
+        "topic_id": "vectors-geometry",
+        "evidence_level": "none",
+        "mastery_indicator": "insufficient_evidence",
+        "quiz_attempts": 0,
+        "latest_quiz_score": null,
+        "latest_quiz_at": null,
+        "failure_count": 0,
+        "blocked_prerequisite_ids": [
+          "algebra-basics"
+        ],
+        "next_review_at": null,
+        "review_due": false
+      }
+    ],
+    "recommendations": [
+      {
+        "topic_id": "algebra-basics",
+        "action": "practice",
+        "priority": 89,
+        "reason": "Latest quiz did not pass (40%); practice before retrying.",
+        "decision_rule": "latest_quiz_failed",
+        "evidence": [
+          "quiz_score",
+          "quiz_passed",
+          "quiz_timestamp"
+        ],
+        "related_topic_ids": [],
+        "completion_condition": "Pass a new quiz with all prerequisites satisfied."
+      },
+      {
+        "topic_id": "arithmetics",
+        "action": "review",
+        "priority": 77,
+        "reason": "A review is due based on the last successful quiz and the review interval.",
+        "decision_rule": "spaced_review_due",
+        "evidence": [
+          "quiz_passed",
+          "quiz_timestamp",
+          "consecutive_passes"
+        ],
+        "related_topic_ids": [],
+        "completion_condition": "Complete another successful quiz; the next interval will be recalculated."
+      },
+      {
+        "topic_id": "angles",
+        "action": "verify",
+        "priority": 57,
+        "reason": "This topic was marked complete manually; no scored quiz evidence is recorded.",
+        "decision_rule": "manual_completion_without_quiz",
+        "evidence": [
+          "manual_completion",
+          "absence_of_quiz"
+        ],
+        "related_topic_ids": [],
+        "completion_condition": "Pass a quiz to record assessment evidence."
+      },
+      {
+        "topic_id": "embeddings",
+        "action": "unblock",
+        "priority": 50,
+        "reason": "Complete the prerequisite topics before attempting this topic's closure quiz.",
+        "decision_rule": "transitive_requires_not_closed",
+        "evidence": [
+          "prerequisite_states"
+        ],
+        "related_topic_ids": [
+          "linear-algebra"
+        ],
+        "completion_condition": "All prerequisite topics become solid or mastered."
+      },
+      {
+        "topic_id": "functions",
+        "action": "unblock",
+        "priority": 50,
+        "reason": "Complete the prerequisite topics before attempting this topic's closure quiz.",
+        "decision_rule": "transitive_requires_not_closed",
+        "evidence": [
+          "prerequisite_states"
+        ],
+        "related_topic_ids": [
+          "algebra-basics"
+        ],
+        "completion_condition": "All prerequisite topics become solid or mastered."
+      },
+      {
+        "topic_id": "vectors-geometry",
+        "action": "unblock",
+        "priority": 50,
+        "reason": "Complete the prerequisite topics before attempting this topic's closure quiz.",
+        "decision_rule": "transitive_requires_not_closed",
+        "evidence": [
+          "prerequisite_states"
+        ],
+        "related_topic_ids": [
+          "algebra-basics"
+        ],
+        "completion_condition": "All prerequisite topics become solid or mastered."
+      },
+      {
+        "topic_id": "linear-algebra",
+        "action": "study",
+        "priority": 32,
+        "reason": "No scored quiz evidence exists for this topic yet.",
+        "decision_rule": "no_quiz_evidence",
+        "evidence": [
+          "absence_of_quiz",
+          "topic_state"
+        ],
+        "related_topic_ids": [],
+        "completion_condition": "Study the topic and pass its closure quiz."
+      },
+      {
+        "topic_id": "circles",
+        "action": "study",
+        "priority": 30,
+        "reason": "No scored quiz evidence exists for this topic yet.",
+        "decision_rule": "no_quiz_evidence",
+        "evidence": [
+          "absence_of_quiz",
+          "topic_state"
+        ],
+        "related_topic_ids": [],
+        "completion_condition": "Study the topic and pass its closure quiz."
+      },
+      {
+        "topic_id": "triangles",
+        "action": "study",
+        "priority": 30,
+        "reason": "No scored quiz evidence exists for this topic yet.",
+        "decision_rule": "no_quiz_evidence",
+        "evidence": [
+          "absence_of_quiz",
+          "topic_state"
+        ],
+        "related_topic_ids": [],
+        "completion_condition": "Study the topic and pass its closure quiz."
+      }
+    ],
+    "graph_warnings": [],
+    "method": "deterministic-heuristic-v1"
+  }
+}

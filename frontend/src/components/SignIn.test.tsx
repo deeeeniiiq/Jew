@@ -13,8 +13,9 @@ describe("sign-in onboarding", () => {
   it("offers one entry action with optional support links", () => {
     const html = render();
     expect(html).toContain("Continue with ChatGPT");
-    expect(html).toContain("https://github.com/miuuyy/Clew");
-    expect(html).toContain("https://x.com/miu21590");
+    expect(html).toContain("Welcome to Jew");
+    expect(html).not.toContain("https://github.com/miuuyy/Clew");
+    expect(html).not.toContain("https://x.com/miu21590");
     expect(html).not.toContain("Skip");
     expect(html).not.toContain("checkbox");
   });

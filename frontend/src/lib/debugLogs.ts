@@ -32,6 +32,7 @@ const PRIVATE_TEXT_KEYS = new Set([
   "reply_message",
 ]);
 const PRIVATE_PATH_PATTERNS = [
+  /\/api\/v1\/agent\/openai-key(?:\/.*)?$/,
   /\/api\/v1\/chatgpt(?:\/.*)?$/,
   /\/api\/v1\/workspace\/config$/,
   /\/api\/v1\/graphs\/[^/]+\/assistant$/,

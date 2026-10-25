@@ -4,6 +4,8 @@ import type { WorkspaceConfig } from "./types";
 
 export function deriveSettingsDrafts(config: WorkspaceConfig): SettingsDrafts {
   return {
+    agentBackend: config.agent_backend,
+    rufloEnabled: config.ruflo_enabled ?? false,
     model: config.default_model ?? "",
     reasoningEffort: config.reasoning_effort ?? "",
     assistantNickname: config.assistant_nickname ?? "",
@@ -39,9 +41,19 @@ export function buildWorkspaceConfigPatch(args: {
   const { config, drafts } = args;
   const patch: WorkspaceConfigPatch = {};
   const currentQuizPassCount = requiredCorrectAnswers(config.pass_threshold, config.quiz_question_count);
+  if (drafts.rufloEnabled !== (config.ruflo_enabled ?? false)) patch.ruflo_enabled = drafts.rufloEnabled;
 
-  if (drafts.model !== (config.default_model ?? "")) patch.default_model = drafts.model || null;
-  if (drafts.reasoningEffort !== (config.reasoning_effort ?? "")) patch.reasoning_effort = drafts.reasoningEffort || null;
+  if (drafts.agentBackend !== config.agent_backend) {
+    patch.agent_backend = drafts.agentBackend;
+    // Each backend has its own model catalog; reset incompatible selections.
+    patch.default_model = null;
+    patch.reasoning_effort = null;
+  }
+
+  if (drafts.agentBackend === config.agent_backend) {
+    if (drafts.model !== (config.default_model ?? "")) patch.default_model = drafts.model || null;
+    if (drafts.reasoningEffort !== (config.reasoning_effort ?? "")) patch.reasoning_effort = drafts.reasoningEffort || null;
+  }
   if (drafts.memoryMode !== config.memory_mode) patch.memory_mode = drafts.memoryMode;
 
   if (drafts.assistantNickname !== (config.assistant_nickname ?? "")) patch.assistant_nickname = drafts.assistantNickname;

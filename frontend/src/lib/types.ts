@@ -42,6 +42,7 @@ export type QuizAttempt = {
   passed: boolean;
   score: number;
   question_count: number;
+  source?: "quiz" | "manual";
   closure_awarded: boolean;
   created_at: string;
   missed_questions: string[];
@@ -99,7 +100,27 @@ export type TopicQuizSession = {
     prompt: string;
     choices: string[];
     explanation: string;
+    verification_status?: "verified" | "unverified";
   }>;
+};
+
+export type StudyPoint = { x: number; y: number };
+export type StudyStroke = {
+  id: string;
+  tool: "pen" | "highlighter";
+  color: string;
+  width: number;
+  points: StudyPoint[];
+};
+export type QuizStudyDraft = {
+  format_version: 1;
+  revision: number;
+  answers: Record<string, number>;
+  active_question_id: string | null;
+  flagged_question_ids: string[];
+  notes: Record<string, string>;
+  strokes: Record<string, StudyStroke[]>;
+  updated_at: string | null;
 };
 
 export type QuizQuestionReview = {
@@ -111,6 +132,70 @@ export type QuizQuestionReview = {
   explanation: string;
 };
 
+export type QuizReportFinding = {
+  question_id: string;
+  outcome: "correct" | "incorrect" | "unanswered";
+  observation: string;
+  error_category: "not_answered" | "undetermined" | null;
+  hypothesis: string | null;
+  diagnosis_confidence: "not_applicable" | "insufficient";
+  evidence_needed: string | null;
+  next_action: string;
+  verification_status: "verified" | "unverified";
+};
+
+export type QuizPedagogicalReport = {
+  attempt_id: string;
+  title: string;
+  attempted_at: string;
+  question_count: number;
+  answered_count: number;
+  correct_count: number;
+  incorrect_count: number;
+  unanswered_count: number;
+  ungraded_count: number;
+  score: number;
+  generator: string;
+  grading_method: string;
+  duration_seconds: number | null;
+  verified_keys_count: number;
+  unverified_keys_count: number;
+  strengths: string[];
+  improvement_areas: string[];
+  evidence_limits: string[];
+  question_findings: QuizReportFinding[];
+  recovery_plan: string[];
+  historical_comparison: string | null;
+  next_steps: string[];
+};
+
+export type QuizReportSummary = {
+  attempt_id: string;
+  topic_id: string;
+  created_at: string;
+  title: string;
+  score: number;
+  question_count: number;
+  in_current_graph: boolean;
+};
+
+export type QuizReportHistoryPage = {
+  items: QuizReportSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+export type QuizReportRecord = {
+  format_version: 1;
+  graph_id: string;
+  topic_id: string;
+  attempt: QuizAttempt;
+  report: QuizPedagogicalReport;
+  reviews: QuizQuestionReview[];
+  in_current_graph: boolean;
+};
+
 export type QuizStartResponse = {
   session: TopicQuizSession;
 };
@@ -120,6 +205,7 @@ export type QuizSubmitResponse = {
   closure_status: TopicClosureStatus;
   awarded_state: TopicState | null;
   reviews: QuizQuestionReview[];
+  report?: QuizPedagogicalReport | null;
   workspace: WorkspaceEnvelope;
 };
 
@@ -200,6 +286,46 @@ export type GraphChatStreamEvent = ({ event_id?: number; session_id?: string; ru
   | { type: "turn_status" | "turn_completed"; status: AgentStatus; error?: string | null; turn_id?: string | null }
   | { type: "heartbeat" }
 ));
+
+export type TopicLearningSignal = {
+  topic_id: string;
+  evidence_level: "none" | "manual_only" | "quiz";
+  mastery_indicator: "insufficient_evidence" | "practice_needed" | "quiz_passed";
+  quiz_attempts: number;
+  latest_quiz_score: number | null;
+  latest_quiz_at: string | null;
+  failure_count: number;
+  blocked_prerequisite_ids: string[];
+  next_review_at: string | null;
+  review_due: boolean;
+};
+
+export type LearningRecommendation = {
+  topic_id: string;
+  action: "study" | "practice" | "review" | "verify" | "unblock" | "repair_graph";
+  priority: number;
+  reason: string;
+  decision_rule: string;
+  evidence: string[];
+  related_topic_ids: string[];
+  completion_condition: string;
+};
+
+export type LearningPlan = {
+  graph_id: string;
+  graph_version: number;
+  evaluated_at: string;
+  total_topics: number;
+  completed_topics: number;
+  certified_topics: number;
+  manual_only_topics: number;
+  due_reviews: number;
+  blocked_topics: number;
+  signals: TopicLearningSignal[];
+  recommendations: LearningRecommendation[];
+  graph_warnings: string[];
+  method: string;
+};
 
 export type GraphAssessment = {
   graph_id: string;
@@ -382,7 +508,8 @@ export type ChatGPTAccount = {
 };
 
 export type WorkspaceConfig = {
-  agent_backend: "chatgpt";
+  agent_backend: "chatgpt" | "ollama" | "openai_api" | "codex_cli" | "ruflo_native";
+  ruflo_enabled: boolean;
   default_model: string | null;
   reasoning_effort: ReasoningEffort | null;
   ui_language: string;
@@ -479,5 +606,48 @@ export type WorkspaceEnvelope = {
     active_graph_id: string | null;
     config: WorkspaceConfig;
     graphs: GraphEnvelope[];
+    learner_profile?: LearnerProfile;
   };
 };
+
+export type LearnerLevel = "beginner" | "intermediate" | "advanced";
+export type RoadmapLanguage = "pt" | "en" | "ru" | "uk";
+export type LearnerProfile = {
+  display_name: string;
+  profession: string;
+  interests: string[];
+  level: LearnerLevel;
+  goal: string;
+  github: string;
+  instagram: string;
+  onboarding_complete: boolean;
+};
+
+export type RoadmapGenerateRequest = {
+  topic: string;
+  profession: string;
+  level: LearnerLevel;
+  goal: string;
+  language: RoadmapLanguage;
+  model?: string | null;
+};
+
+export type RoadmapSource = { label: string; url: string; kind?: "encyclopedia" | "research" | "book" };
+export type RoadmapTopic = {
+  title: string;
+  description: string;
+  outcome: string;
+  stage: number;
+  estimated_minutes: number;
+  prerequisites: number[];
+  resources: RoadmapSource[];
+};
+export type RoadmapPreview = {
+  title: string;
+  subject: string;
+  description: string;
+  language: RoadmapLanguage;
+  resource_search_status: "available" | "limited" | "unavailable";
+  topics: RoadmapTopic[];
+};
+export type RoadmapPreviewResponse = { ticket: string; preview: RoadmapPreview };

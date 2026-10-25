@@ -30,4 +30,4 @@ if not python_license.is_file():
 if not python_license.is_file():
     raise RuntimeError("The Python runtime license is missing from this build environment.")
 (output / "Python-LICENSE.txt").write_bytes(python_license.read_bytes())
-(output / "INDEX.txt").write_text("Clew desktop: Python package notices from the native build environment\n\n" + "\n".join(index) + "\n", encoding="utf-8")
+(output / "INDEX.txt").write_text("Jew desktop: Python package notices from the native build environment\n\n" + "\n".join(index) + "\n", encoding="utf-8")

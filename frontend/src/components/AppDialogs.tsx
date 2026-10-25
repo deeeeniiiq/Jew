@@ -5,7 +5,7 @@ import { CreateGraphDialog } from "./dialogs/CreateGraphDialog";
 import { ExportGraphDialog } from "./dialogs/ExportGraphDialog";
 import { ImportGraphDialog } from "./dialogs/ImportGraphDialog";
 import { ObsidianImportDialog } from "./dialogs/ObsidianImportDialog";
-import { QuizDialog } from "./dialogs/QuizDialog";
+import { StudyWorkspace } from "./study/StudyWorkspace";
 import { API_BASE } from "../lib/api";
 import type { AppCopy } from "../lib/appCopy";
 import { type apiFetch, type readErrorMessage } from "../lib/apiRequest";
@@ -17,6 +17,7 @@ import type {
   GraphExportPackagePayload,
   ObsidianExportOptions,
   QuizQuestionReview,
+    QuizPedagogicalReport,
   Topic,
   TopicQuizSession,
   WorkspaceEnvelope,
@@ -109,10 +110,11 @@ type AppDialogsProps = {
   closeQuizModal: () => void;
   quizError: string | null;
   quizReviews: QuizQuestionReview[] | null;
+  quizReport: QuizPedagogicalReport | null;
   quizAnswers: Record<string, number>;
   setQuizAnswers: StateSetter<Record<string, number>>;
   quizLoading: boolean;
-  submitQuiz: () => Promise<void>;
+  submitQuiz: (answersOverride?: Record<string, number>) => Promise<void>;
 };
 
 export function AppDialogs(props: AppDialogsProps): React.JSX.Element {
@@ -201,7 +203,7 @@ export function AppDialogs(props: AppDialogsProps): React.JSX.Element {
     closeQuizModal,
     quizError,
     quizReviews,
-    quizAnswers,
+    quizReport,
     setQuizAnswers,
     quizLoading,
     submitQuiz,
@@ -350,7 +352,8 @@ export function AppDialogs(props: AppDialogsProps): React.JSX.Element {
         copy={copy}
       />
 
-      <QuizDialog
+      {quizSession ? <StudyWorkspace
+        key={`${quizSession.graph_id}:${quizSession.topic_id}:${quizSession.session_id}`}
         session={quizSession}
         modalRef={quizModalRef}
         closeButtonRef={quizCloseButtonRef}
@@ -358,12 +361,12 @@ export function AppDialogs(props: AppDialogsProps): React.JSX.Element {
         closeModal={closeQuizModal}
         error={quizError}
         reviews={quizReviews}
-        answers={quizAnswers}
+        report={quizReport}
         setAnswers={setQuizAnswers}
         loading={quizLoading}
         submitQuiz={submitQuiz}
         copy={copy}
-      />
+      /> : null}
     </>
   );
 }

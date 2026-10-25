@@ -11,7 +11,7 @@ import re
 import uuid
 
 from app.models.api import GraphExportPackage, ObsidianExportOptions, ObsidianGraphExportPackage
-from app.models.domain import Artifact, ChatMessage, CreateGraphRequest, Edge, GraphChatThread, GraphProposal, GraphSummary, PatchOperation, QuizAttempt, ResourceLink, TopicQuizSession, SnapshotRecord, StudyGraph, Topic, UpdateWorkspaceConfigRequest, WorkspaceDocument, WorkspaceEnvelope, Zone
+from app.models.domain import Artifact, ChatMessage, CreateGraphRequest, Edge, GraphChatThread, GraphProposal, GraphSummary, LearnerProfile, PatchOperation, QuizAttempt, QuizStudyDraft, QuizPedagogicalReport, QuizQuestionReview, QuizReportRecord, ResourceLink, TopicQuizSession, SnapshotRecord, StudyGraph, Topic, UpdateWorkspaceConfigRequest, WorkspaceDocument, WorkspaceEnvelope, Zone
 from app.services.obsidian_export import build_obsidian_export_package
 from app.services.repository_config import apply_workspace_config_update
 from app.services.proposal_validator import prerequisites_are_acyclic
@@ -68,10 +68,15 @@ class GraphRepository:
 
     def _init_db(self) -> None:
         with self._connect() as conn:
+            # Serialize schema migrations across concurrent desktop/backend starts.
+            conn.execute("BEGIN IMMEDIATE")
             init_repository_storage(conn)
 
     def _ensure_seed(self) -> None:
         with self._connect() as conn:
+            # Check and create the first snapshot under one writer lock.
+            # Otherwise two fresh processes can each observe an empty database.
+            conn.execute("BEGIN IMMEDIATE")
             ensure_seed_snapshot(conn)
 
     def _invalidate_workspace_cache(self) -> None:
@@ -214,7 +219,58 @@ class GraphRepository:
 
     def delete_quiz_session(self, session_id: str) -> None:
         with self._connect() as conn:
+            conn.execute("DELETE FROM quiz_study_drafts WHERE session_id = ?", (session_id,))
             conn.execute("DELETE FROM quiz_sessions WHERE session_id = ?", (session_id,))
+
+    def quiz_study_draft(self, graph_id: str, topic_id: str, session_id: str) -> QuizStudyDraft:
+        with self._connect() as conn:
+            session_row = conn.execute(
+                "SELECT 1 FROM quiz_sessions WHERE session_id=? AND graph_id=? AND topic_id=?",
+                (session_id, graph_id, topic_id),
+            ).fetchone()
+            if session_row is None:
+                raise KeyError(session_id)
+            row = conn.execute("SELECT payload_json FROM quiz_study_drafts WHERE session_id=?", (session_id,)).fetchone()
+        return QuizStudyDraft.model_validate_json(row["payload_json"]) if row is not None else QuizStudyDraft()
+
+    def save_quiz_study_draft(self, graph_id: str, topic_id: str, session_id: str,
+                              draft: QuizStudyDraft) -> QuizStudyDraft:
+        with self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                "SELECT payload_json FROM quiz_sessions WHERE session_id=? AND graph_id=? AND topic_id=?",
+                (session_id, graph_id, topic_id),
+            ).fetchone()
+            if row is None:
+                raise KeyError(session_id)
+            session = TopicQuizSession.model_validate_json(row["payload_json"])
+            question_map = {question.id: question for question in session.questions}
+            referenced = set(draft.answers) | set(draft.notes) | set(draft.strokes) | set(draft.flagged_question_ids)
+            if draft.active_question_id is not None:
+                referenced.add(draft.active_question_id)
+            if not referenced.issubset(question_map):
+                raise ValueError("Study draft references unknown questions.")
+            if any(type(answer) is not int or answer < 0 or answer >= len(question_map[qid].choices)
+                   for qid, answer in draft.answers.items()):
+                raise ValueError("Study draft has an invalid answer choice.")
+            if len(set(draft.flagged_question_ids)) != len(draft.flagged_question_ids):
+                raise ValueError("Study draft has duplicate review flags.")
+            if any(len(note) > 20000 for note in draft.notes.values()):
+                raise ValueError("Study note exceeds 20,000 characters.")
+            if sum(len(items) for items in draft.strokes.values()) > 600:
+                raise ValueError("Study draft exceeds 600 strokes.")
+            current = conn.execute("SELECT revision FROM quiz_study_drafts WHERE session_id=?", (session_id,)).fetchone()
+            revision = int(current["revision"]) if current is not None else 0
+            if draft.revision != revision:
+                raise RepositoryConflictError("Study draft changed in another window. Reopen to get the latest version.")
+            updated = draft.model_copy(update={"revision": revision + 1, "updated_at": datetime.now(timezone.utc)})
+            conn.execute("""
+                INSERT INTO quiz_study_drafts (session_id, revision, updated_at, payload_json)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(session_id) DO UPDATE SET
+                    revision=excluded.revision, updated_at=excluded.updated_at, payload_json=excluded.payload_json
+            """, (session_id, updated.revision, updated.updated_at.isoformat(), updated.model_dump_json()))
+        return updated
 
     def _resolve_session(self, conn: sqlite3.Connection, graph_id: str, session_id: str | None) -> sqlite3.Row:
         """Look up a specific chat session or ensure the general one exists."""
@@ -449,7 +505,14 @@ class GraphRepository:
         return self.snapshot(new_snapshot_id)
 
     def record_quiz_attempt(self, graph_id: str, attempt: QuizAttempt, awarded_state: str | None,
-                            *, base_graph_version: int, session_id: str) -> WorkspaceEnvelope:
+                            *, base_graph_version: int, session_id: str,
+                            report: QuizPedagogicalReport | None = None,
+                            reviews: list[QuizQuestionReview] | None = None) -> WorkspaceEnvelope:
+        if (report is None) != (reviews is None):
+            raise ValueError("Pedagogical report and reviews must be recorded together.")
+        record = (QuizReportRecord(graph_id=graph_id, topic_id=attempt.topic_id,
+                                  attempt=attempt, report=report, reviews=reviews)
+                  if report is not None and reviews is not None else None)
         current = self.current()
         workspace = WorkspaceDocument.model_validate(deepcopy(current.workspace.model_dump()))
         graph_map = {graph.graph_id: graph for graph in workspace.graphs}
@@ -464,7 +527,8 @@ class GraphRepository:
         if topic is None:
             raise ValueError(f"topic {attempt.topic_id} not found")
 
-        graph.quiz_attempts = [item for item in graph.quiz_attempts if item.topic_id != attempt.topic_id]
+        # Keep every graded attempt for the student's audit trail. The newest
+        # entry remains the effective result; older records are never erased.
         graph.quiz_attempts.append(attempt)
 
         if awarded_state is not None:
@@ -486,6 +550,7 @@ class GraphRepository:
                                     (session_id, graph_id, attempt.topic_id))
             if consumed.rowcount != 1:
                 raise RepositoryConflictError("This quiz was already submitted or removed. Start a new test.")
+            conn.execute("DELETE FROM quiz_study_drafts WHERE session_id=?", (session_id,))
             snapshot_id = self._insert_snapshot(
                 conn,
                 workspace,
@@ -493,8 +558,71 @@ class GraphRepository:
                 reason=f"quiz attempt for {attempt.topic_id}",
                 parent_snapshot_id=current.snapshot.id,
             )
+            if record is not None:
+                conn.execute("""
+                    INSERT INTO quiz_pedagogical_reports
+                    (attempt_id, graph_id, topic_id, created_at, format_version, payload_json)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (attempt.id, graph_id, attempt.topic_id, attempt.created_at.isoformat(),
+                      record.format_version, record.model_dump_json()))
 
         return self.snapshot(snapshot_id)
+
+    def _report_scope(self, graph_id: str, topic_id: str) -> set[str]:
+        graph = self.graph(graph_id)
+        if not any(topic.id == topic_id for topic in graph.topics):
+            raise KeyError(topic_id)
+        return {attempt.id for attempt in graph.quiz_attempts if attempt.topic_id == topic_id}
+
+    @staticmethod
+    def _validated_report(row: sqlite3.Row, graph_id: str, topic_id: str) -> QuizReportRecord:
+        if row["format_version"] != 1:
+            raise ValueError("Unsupported pedagogical report format version.")
+        try:
+            record = QuizReportRecord.model_validate_json(row["payload_json"])
+        except (ValueError, TypeError) as exc:
+            raise ValueError("Corrupted pedagogical report record.") from exc
+        if (record.graph_id, record.topic_id, record.attempt.id, record.format_version) != (
+            graph_id, topic_id, row["attempt_id"], row["format_version"]
+        ) or record.attempt.created_at.isoformat() != row["created_at"]:
+            raise ValueError("Pedagogical report metadata does not match its record.")
+        return record
+
+    def get_quiz_report(self, graph_id: str, topic_id: str, attempt_id: str) -> dict:
+        current_attempts = self._report_scope(graph_id, topic_id)
+        with self._connect() as conn:
+            row = conn.execute("""
+                SELECT * FROM quiz_pedagogical_reports
+                WHERE graph_id=? AND topic_id=? AND attempt_id=?
+            """, (graph_id, topic_id, attempt_id)).fetchone()
+        if row is None:
+            raise KeyError(attempt_id)
+        record = self._validated_report(row, graph_id, topic_id)
+        return record.model_dump(mode="json") | {"in_current_graph": attempt_id in current_attempts}
+
+    def list_quiz_reports(self, graph_id: str, topic_id: str, *, limit: int = 20,
+                          offset: int = 0) -> dict:
+        if not 1 <= limit <= 100 or offset < 0:
+            raise ValueError("Invalid history pagination.")
+        current_attempts = self._report_scope(graph_id, topic_id)
+        with self._connect() as conn:
+            total = conn.execute("""
+                SELECT COUNT(*) FROM quiz_pedagogical_reports WHERE graph_id=? AND topic_id=?
+            """, (graph_id, topic_id)).fetchone()[0]
+            rows = conn.execute("""
+                SELECT * FROM quiz_pedagogical_reports
+                WHERE graph_id=? AND topic_id=?
+                ORDER BY created_at DESC, attempt_id DESC LIMIT ? OFFSET ?
+            """, (graph_id, topic_id, limit, offset)).fetchall()
+        items = []
+        for row in rows:
+            record = self._validated_report(row, graph_id, topic_id)
+            items.append({"attempt_id": record.attempt.id, "topic_id": topic_id,
+                          "created_at": row["created_at"], "title": record.report.title,
+                          "score": record.attempt.score,
+                          "question_count": record.attempt.question_count,
+                          "in_current_graph": record.attempt.id in current_attempts})
+        return {"items": items, "total": total, "limit": limit, "offset": offset}
 
     def mark_topic_finished(self, graph_id: str, topic_id: str) -> WorkspaceEnvelope:
         current = self.current()
@@ -523,7 +651,10 @@ class GraphRepository:
             stack.extend(parents_by_child.get(current_topic_id, []))
 
         topic_map = {item.id: item for item in graph.topics}
-        graph.quiz_attempts = [item for item in graph.quiz_attempts if item.topic_id not in visited]
+        # Every manual closure is an auditable progress event. Append a new
+        # event after existing graded and manual history, including for the
+        # prerequisites closed by this operation. The last event represents
+        # the current closure activity; earlier events remain available.
         for current_topic_id in topic_ids_to_close:
             current_topic = topic_map.get(current_topic_id)
             if current_topic is None:
@@ -536,6 +667,7 @@ class GraphRepository:
                     passed=True,
                     score=1.0,
                     question_count=max(1, workspace.config.quiz_question_count),
+                    source="manual",
                     closure_awarded=True,
                 )
             )
@@ -550,6 +682,14 @@ class GraphRepository:
                 reason=f"mark topic {topic.title} finished with prerequisite closure",
                 parent_snapshot_id=current.snapshot.id,
             )
+            # The manual closure and invalidation of any pending tests for the
+            # selected topic must commit together. Clearing them later in the
+            # route could delete a newly created session after this snapshot.
+            conn.execute("""DELETE FROM quiz_study_drafts WHERE session_id IN
+                         (SELECT session_id FROM quiz_sessions WHERE graph_id = ? AND topic_id = ?)""",
+                         (graph_id, topic_id))
+            conn.execute("DELETE FROM quiz_sessions WHERE graph_id = ? AND topic_id = ?",
+                         (graph_id, topic_id))
 
         return self.snapshot(snapshot_id)
 
@@ -586,6 +726,63 @@ class GraphRepository:
                 reason=f"create graph {graph.title}",
                 parent_snapshot_id=current.snapshot.id,
             )
+        return self.snapshot(snapshot_id)
+
+    def save_learner_profile(self, profile: LearnerProfile) -> WorkspaceEnvelope:
+        current = self.current()
+        workspace = WorkspaceDocument.model_validate(deepcopy(current.workspace.model_dump()))
+        workspace.learner_profile = profile
+        with self._connect() as conn:
+            snapshot_id = self._insert_snapshot(
+                conn, workspace, source="learner.profile", reason="Update local learning profile",
+                parent_snapshot_id=current.snapshot.id,
+            )
+        return self.snapshot(snapshot_id)
+
+    def create_roadmap(self, roadmap: "RoadmapPreview", *, expected_snapshot_id: int | None = None) -> WorkspaceEnvelope:
+        """Commit a reviewed preview as a new graph in one reversible snapshot."""
+        from app.services.roadmap_studio import RoadmapPreview
+
+        roadmap = RoadmapPreview.model_validate(roadmap)
+        current = self.current()
+        if expected_snapshot_id is not None and current.snapshot.id != expected_snapshot_id:
+            raise RepositoryConflictError("The workspace changed since the roadmap preview. Generate a new preview.")
+        workspace = WorkspaceDocument.model_validate(deepcopy(current.workspace.model_dump()))
+        graph_id = self._unique_graph_id(roadmap.title, existing_ids={g.graph_id for g in workspace.graphs})
+        topics = []
+        edges = []
+        stage_groups: dict[int, list[str]] = {}
+        for i, entry in enumerate(roadmap.topics):
+            topic_id = f"roadmap-{i + 1}"
+            stage_groups.setdefault(entry.stage, []).append(topic_id)
+            topics.append(Topic(
+                id=topic_id, title=entry.title, slug=f"topic-{i + 1}",
+                description=entry.description, estimated_minutes=entry.estimated_minutes,
+                level=entry.stage, difficulty=min(1, (entry.stage + 1) / 6),
+                zones=[f"stage-{entry.stage}"],
+                resources=[ResourceLink(id=f"source-{i}-{j}", label=r.label, url=r.url, kind="reference")
+                           for j, r in enumerate(entry.resources)],
+                metadata={"learning_outcome": entry.outcome},
+            ))
+            for source in entry.prerequisites:
+                if source >= i or source < 0:
+                    raise ValueError("Roadmap prerequisite must reference an earlier topic")
+                edges.append(Edge(id=f"prerequisite-{source}-{i}", source_topic_id=f"roadmap-{source + 1}",
+                                  target_topic_id=topic_id, relation="requires"))
+        colors = ["#7C5CFF", "#528BFF", "#23A6A6", "#D39B3A", "#C26FAD", "#6B8C61"]
+        zones = [Zone(id=f"stage-{stage}", title=f"Etapa {stage + 1}", kind="chapter",
+                      color=colors[stage % len(colors)], topic_ids=ids)
+                 for stage, ids in sorted(stage_groups.items())]
+        graph = StudyGraph(graph_id=graph_id, subject=roadmap.subject, title=roadmap.title,
+                           language=roadmap.language, topics=topics, edges=edges, zones=zones,
+                           metadata={"description": roadmap.description, "generator": "ollama-roadmap",
+                                     "resource_search_status": roadmap.resource_search_status})
+        workspace.graphs.append(graph)
+        workspace.active_graph_id = graph_id
+        with self._connect() as conn:
+            snapshot_id = self._insert_snapshot(conn, workspace, source="roadmap.create",
+                                                reason=f"Create reviewed roadmap {graph.title}",
+                                                parent_snapshot_id=current.snapshot.id)
         return self.snapshot(snapshot_id)
 
     def delete_graph(self, graph_id: str) -> WorkspaceEnvelope:
@@ -651,6 +848,8 @@ class GraphRepository:
         title: str | None = None,
         include_progress: bool = True,
     ) -> WorkspaceEnvelope:
+        if package.kind != "mapmind_graph_export" or package.version != 1:
+            raise ValueError("Unsupported graph package kind or version.")
         current = self.current()
         workspace = WorkspaceDocument.model_validate(deepcopy(current.workspace.model_dump()))
         import_title = (title or package.title or package.graph.title).strip()
@@ -670,6 +869,14 @@ class GraphRepository:
             raise ValueError("Imported topics reference unknown zones.")
         if any(topic_id not in entity_ids["topic"] for zone in graph.zones for topic_id in zone.topic_ids):
             raise ValueError("Imported zones reference unknown topics.")
+        if not prerequisites_are_acyclic(graph.edges):
+            raise ValueError("prerequisite relations must not contain self-dependencies or directed cycles")
+        if include_progress and any(attempt.topic_id not in entity_ids["topic"] for attempt in graph.quiz_attempts):
+            raise ValueError("Imported quiz attempts reference unknown topics.")
+        if include_progress:
+            attempt_ids = [attempt.id for attempt in graph.quiz_attempts]
+            if len(set(attempt_ids)) != len(attempt_ids) or any(not attempt_id.strip() for attempt_id in attempt_ids):
+                raise ValueError("Imported quiz attempt ids must be distinct and nonempty.")
         graph.title = import_title
         graph.graph_id = self._unique_graph_id(import_title, existing_ids={item.graph_id for item in workspace.graphs})
         graph.generated_at = datetime.now(timezone.utc)

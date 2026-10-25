@@ -53,7 +53,7 @@ async function collectRelease(source, destination, { complete = false, version =
         const os = name === 'latest-mac.yml' ? 'mac' : name === 'latest.yml' ? 'win' : 'linux';
         const arch = name === 'latest-linux-arm64.yml' ? ['arm64'] : name === 'latest-mac.yml' ? ['arm64', 'x64'] : ['x64'];
         const extensions = os === 'mac' ? ['zip', 'dmg'] : os === 'win' ? ['exe'] : ['AppImage', 'deb'];
-        const names = arch.flatMap(a => extensions.map(ext => `Clew-${version}-${os}-${a}.${ext}`));
+        const names = arch.flatMap(a => extensions.map(ext => `Jew-${version}-${os}-${a}.${ext}`));
         if (!names.includes(item.url)) throw new Error(`Wrong platform asset in ${name}: ${item.url}`);
         if (fs.statSync(asset).size !== item.size || await sha512(asset) !== item.sha512) throw new Error(`Update asset checksum or size mismatch: ${item.url}`);
         files.set(item.url, item);
@@ -75,7 +75,7 @@ async function collectRelease(source, destination, { complete = false, version =
     const expected = [
       'win-x64.exe', 'mac-arm64.dmg', 'mac-arm64.zip', 'mac-x64.dmg', 'mac-x64.zip',
       'linux-x64.AppImage', 'linux-x64.deb', 'linux-arm64.AppImage', 'linux-arm64.deb'
-    ].map(suffix => `Clew-${version}-${suffix}`);
+    ].map(suffix => `Jew-${version}-${suffix}`);
     for (const asset of expected) if (!assets.has(asset)) throw new Error(`Required release asset missing: ${asset}`);
     for (const name of allowedManifests) if (!merged.has(name)) throw new Error(`Required updater manifest missing: ${name}`);
     for (const [platform, arch] of [['win32', 'x64'], ['darwin', 'arm64'], ['darwin', 'x64'], ['linux', 'x64'], ['linux', 'arm64']]) {

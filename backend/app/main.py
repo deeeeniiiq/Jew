@@ -49,13 +49,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if settings.desktop_token and not hmac.compare_digest(
                 request.headers.get("x-clew-session", "").encode("utf-8"), settings.desktop_token.encode("utf-8")
             ):
-                return JSONResponse(status_code=403, content={"detail": "This request is not from the Clew desktop app."})
-            if not request.url.path.startswith("/api/v1/chatgpt/"):
-                try:
-                    await request.app.state.agent_runtime.auth.access_token()
-                except ChatGPTError as exc:
-                    return JSONResponse(status_code=503 if exc.retryable else 401,
-                                        content={"detail": str(exc), "code": exc.code})
+                return JSONResponse(status_code=403, content={"detail": "This request is not from the Jew desktop app."})
+            # The desktop session authenticates local API access. Provider credentials
+            # are checked only when an AI operation actually needs them.
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"

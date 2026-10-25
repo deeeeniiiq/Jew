@@ -2,14 +2,62 @@ from html import escape
 from urllib.parse import parse_qs
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, Field
 from fastapi.responses import HTMLResponse
 
 from app.agent.chatgpt_auth import CALLBACK_PATH, ChatGPTError
 from app.api.deps import get_agent_runtime
 from app.core.config import Settings, get_settings
+from app.agent.codex_cli import CodexCLIClient
 
 router = APIRouter(prefix="/api/v1/chatgpt")
 callback_router = APIRouter()
+providers_router = APIRouter(prefix="/api/v1/agent")
+
+
+class APIKeyUpdate(BaseModel):
+    key: str = Field(min_length=1, max_length=4096)
+
+
+@providers_router.get("/openai-key")
+def openai_key_status(runtime=Depends(get_agent_runtime)) -> dict:
+    return runtime.api_key_status()
+
+
+@providers_router.put("/openai-key")
+async def openai_key_save(payload: APIKeyUpdate, runtime=Depends(get_agent_runtime)) -> dict:
+    try:
+        return await runtime.save_api_key(payload.key)
+    except ChatGPTError as exc:
+        raise HTTPException(status_code=422 if exc.code == "api_key_invalid" else 503, detail=str(exc)) from exc
+
+
+@providers_router.delete("/openai-key")
+def openai_key_delete(runtime=Depends(get_agent_runtime)) -> dict:
+    try:
+        return runtime.delete_api_key()
+    except ChatGPTError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@providers_router.get("/models")
+async def provider_models(runtime=Depends(get_agent_runtime)) -> dict:
+    try:
+        return {"provider": runtime.repository.current().workspace.config.agent_backend,
+                "models": await runtime.models()}
+    except ChatGPTError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@providers_router.get("/codex-status")
+async def codex_status(runtime=Depends(get_agent_runtime)) -> dict:
+    return await runtime.codex_cli.status()
+
+
+@providers_router.get("/ruflo/status")
+async def ruflo_status(runtime=Depends(get_agent_runtime)) -> dict:
+    config = runtime.repository.current().workspace.config
+    return await runtime.ruflo.status(config.agent_backend == "ruflo_native" or config.ruflo_enabled)
 
 
 @router.get("/account")
@@ -53,9 +101,12 @@ def _page(title: str, body: str, status: int) -> HTMLResponse:
 async def oauth_callback(request: Request, settings: Settings = Depends(get_settings), runtime=Depends(get_agent_runtime)) -> HTMLResponse:
     # The registered redirect is the loopback address; reject other hosts reaching this route.
     if request.headers.get("host") != f"127.0.0.1:{settings.api_port}":
-        return _page("Not found", "This address only completes a local Clew sign-in.", 404)
+        return _page("Not found", "This address only completes a local Jew sign-in.", 404)
     try:
         await runtime.auth.complete_login(parse_qs(request.url.query, keep_blank_values=True))
     except ChatGPTError as exc:
         return _page("Sign-in did not finish", str(exc), 400)
-    return _page("Return to Clew", "Clew is connected to your ChatGPT account. You can close this tab.", 200)
+    except Exception:
+        # Fail closed without leaking credentials, codes or stack traces into the browser.
+        return _page("Sign-in did not finish", "Jew could not save the connection. Return to Jew and try again.", 503)
+    return _page("Return to Jew", "Jew is connected to your ChatGPT account. You can close this tab.", 200)

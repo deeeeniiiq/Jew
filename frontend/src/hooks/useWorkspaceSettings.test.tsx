@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { WorkspaceConfig } from "../lib/types";
 import { useWorkspaceSettings } from "./useWorkspaceSettings";
 
-const config: WorkspaceConfig = { agent_backend: "chatgpt", default_model: "chosen", reasoning_effort: null, ui_language: "en", canonical_graph_language: "en", disable_idle_animations: false, memory_mode: "balanced", assistant_nickname: "", persona_rules: "", quiz_question_count: 12, pass_threshold: 0.75, enable_closure_tests: true, debug_mode_enabled: false, memory_history_message_limit: 32, memory_include_graph_context: true, memory_include_progress_context: true, memory_include_quiz_context: true, memory_include_frontier_context: true, memory_include_selected_topic_context: true, allow_explore_without_closure: true, require_prerequisite_closure_for_completion: true };
+const config: WorkspaceConfig = { agent_backend: "chatgpt", ruflo_enabled: false, default_model: "chosen", reasoning_effort: null, ui_language: "en", canonical_graph_language: "en", disable_idle_animations: false, memory_mode: "balanced", assistant_nickname: "", persona_rules: "", quiz_question_count: 12, pass_threshold: 0.75, enable_closure_tests: true, debug_mode_enabled: false, memory_history_message_limit: 32, memory_include_graph_context: true, memory_include_progress_context: true, memory_include_quiz_context: true, memory_include_frontier_context: true, memory_include_selected_topic_context: true, allow_explore_without_closure: true, require_prerequisite_closure_for_completion: true };
 let root: Root;
 let settings: ReturnType<typeof useWorkspaceSettings>;
 const update = vi.fn().mockResolvedValue(undefined);

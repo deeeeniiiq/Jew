@@ -1,7 +1,7 @@
 import React from "react";
 
 /**
- * Brand loader that traces the Clew logo path and reveals waypoint dots in sequence.
+ * Brand loader that traces the Jew logo path and reveals waypoint dots in sequence.
  * Size scales via `size`; the theme sets the logo color through `currentColor`.
  */
 

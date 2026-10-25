@@ -1,6 +1,6 @@
 import type { AgentControls } from "./assistant/AgentInteraction";
 import React from "react";
-import { BookBookmark, BugBeetle, CaretDown, CaretLeft, CaretRight, ChatCircleDots, CrosshairSimple, DownloadSimple, GearSix, PencilSimple, Plus, SquaresFour, X } from "@phosphor-icons/react";
+import { BookBookmark, BugBeetle, CaretDown, CaretLeft, CaretRight, ChatCircleDots, CrosshairSimple, DownloadSimple, GearSix, PencilSimple, Plus, SquaresFour, X, MapTrifold, UserCircle } from "@phosphor-icons/react";
 
 import { APP_NAME, ASSISTANT_MIN_WIDTH, type GraphChatState, type ThemeMode, type WorkspaceSurfacePayload } from "../lib/appContracts";
 import { API_BASE } from "../lib/api";
@@ -23,9 +23,11 @@ import type { AppCopy } from "../lib/appCopy";
 import { formatMinutes, formatTopicState, getTopicStateTone } from "../lib/graph";
 import { useModalAccessibility } from "../lib/useModalAccessibility";
 import { GraphCanvas } from "./GraphCanvas";
+import { LearningGuidance } from "./LearningGuidance";
 import type { TopicAnchorPoint } from "./GraphCanvas";
 import { AssistantModelMenuTrigger, LightChatWindow, LightWorkspaceWindow, TopicAssetModal } from "./WorkspaceShellAuxWindows";
 import { AssistantComposer } from "./assistant/AssistantComposer";
+import { AssistantMarkdown } from "./assistant/AssistantMarkdown";
 import { AssistantSessionList } from "./assistant/AssistantSessionList";
 import { AssistantThread } from "./assistant/AssistantThread";
 import { TopStatsOverlay } from "./TopStatsOverlay";
@@ -37,6 +39,7 @@ import type {
   ChatSessionSummary,
   GraphAssessment,
   GraphEnvelope,
+  LearningPlan,
   ProposalGenerateResponse,
   ResourceLink,
   Topic,
@@ -118,6 +121,8 @@ type WorkspaceNavigationProps = {
   setDeleteConfirm: StateSetter<{ graphId: string; title: string } | null>;
   setCreateGraphOpen: StateSetter<boolean>;
   setCreateGraphError: StateSetter<string | null>;
+  openRoadmapStudio: () => void;
+  openLearnerProfile: () => void;
   mobileMenuOpen: boolean;
   setMobileMenuOpen: StateSetter<boolean>;
 };
@@ -181,6 +186,10 @@ type GraphWorkspaceProps = {
 type TopicDetailsProps = {
   addTopicResource: (topicId: string, url: string) => Promise<void>;
   addTopicArtifact: (topicId: string, title: string, body: string) => Promise<void>;
+  generateLesson: () => Promise<void>;
+  lessonLoading: boolean;
+  lessonError: string | null;
+  lessonSuccess: string | null;
   selectedTopic: Topic | null;
   selectedTopicAnchor: TopicAnchorPoint | null;
   popoverPosition: PopoverPosition | null;
@@ -190,12 +199,14 @@ type TopicDetailsProps = {
   selectedResourceLinks: ResourceLink[];
   selectedArtifacts: Artifact[];
   selectedClosureStatus: TopicClosureStatus | null;
+  learningPlan: LearningPlan | null;
   topicTitlesById: Map<string, string>;
   quizError: string | null;
   quizSuccess: string | null;
   closureTestsEnabled: boolean;
   quizLoading: boolean;
   startQuiz: () => Promise<void>;
+  openQuizReportHistory: () => void;
   markTopicFinished: () => Promise<void>;
 };
 
@@ -273,6 +284,8 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
     setDeleteConfirm,
     setCreateGraphOpen,
     setCreateGraphError,
+    openRoadmapStudio,
+    openLearnerProfile,
     mobileMenuOpen,
     setMobileMenuOpen,
   } = navigation;
@@ -332,6 +345,10 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
   const {
     addTopicResource,
     addTopicArtifact,
+    generateLesson,
+    lessonLoading,
+    lessonError,
+    lessonSuccess,
     selectedTopic,
     selectedTopicAnchor,
     popoverPosition,
@@ -341,12 +358,14 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
     selectedResourceLinks,
     selectedArtifacts,
     selectedClosureStatus,
+    learningPlan,
     topicTitlesById,
     quizError,
     quizSuccess,
     closureTestsEnabled,
     quizLoading,
     startQuiz,
+    openQuizReportHistory,
     markTopicFinished,
   } = topicDetails;
   const {
@@ -683,6 +702,8 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
   const visibleMessages = currentChatState.messages.filter((message) => !message.hidden);
   const pathTitles = focusData.pathLayers.flat().map((entry) => entry.title);
   const selectedTopicClosed = selectedTopic?.state === "solid" || selectedTopic?.state === "mastered";
+  const selectedLessons = selectedArtifacts.filter((artifact) => artifact.kind === "lesson");
+  const selectedOtherArtifacts = selectedArtifacts.filter((artifact) => artifact.kind !== "lesson");
   const topicPopoverConnector = React.useMemo(() => {
     if (graphViewMode !== "3d" || !selectedTopic || !selectedTopicAnchor || !popoverPosition || isMobileViewport) return null;
     const width = topicPopoverRef.current?.offsetWidth ?? 380;
@@ -1010,6 +1031,14 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
         </div>
 
         <div className="sidebarAccountSection">
+          <button className="sidebarAccountTrigger" type="button" onClick={openRoadmapStudio}>
+            <MapTrifold size={17} weight="bold" className="sidebarIcon" />
+            <div className="sidebarAccountMeta"><span className="sidebarAccountTriggerName">Criar roadmap</span></div>
+          </button>
+          <button className="sidebarAccountTrigger" type="button" onClick={openLearnerProfile}>
+            <UserCircle size={17} weight="bold" className="sidebarIcon" />
+            <div className="sidebarAccountMeta"><span className="sidebarAccountTriggerName">Meu perfil</span></div>
+          </button>
           <button
             className="sidebarAccountTrigger"
             onClick={openConfigurationSettings}
@@ -1028,7 +1057,7 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
           >
             <BookBookmark size={16} weight="bold" className="sidebarIcon" />
             <div className="sidebarAccountMeta">
-              <span className="sidebarAccountTriggerName">{copy.sidebar.documentation}</span>
+              <span className="sidebarAccountTriggerName">Original Clew documentation</span>
             </div>
           </a>
           {debugModeEnabled ? (
@@ -1287,6 +1316,10 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
                             : copy.emptyState.emptyBody}
                         </p>
                         <div className="emptyStateActions">
+                          <button className="emptyStateAction jewCreateRoadmapAction" type="button"
+                            disabled={workspaceSurface ? !workspaceSurface.can_create_graph : false} onClick={openRoadmapStudio}>
+                            ✦ Criar roadmap com IA local
+                          </button>
                           <button
                             className="emptyStateAction"
                             disabled={workspaceSurface ? !workspaceSurface.can_create_graph : false}
@@ -1392,6 +1425,31 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
                     </div>
                     <div className="topicPopoverSection">
                       <div className="topicPopoverSectionHeader">
+                        <div className="topicPopoverLabel">{copy.topic.lessons}</div>
+                        <button className="topicPopoverLessonButton" type="button" disabled={lessonLoading}
+                          onClick={() => void generateLesson()}>
+                          <BookBookmark size={14} aria-hidden="true" />
+                          {lessonLoading ? copy.topic.generatingLesson : copy.topic.generateLesson}
+                        </button>
+                      </div>
+                      {lessonError ? <div role="alert" className="topicPopoverNotice topicPopoverNoticeBad">{lessonError}</div> : null}
+                      {lessonSuccess ? <div role="status" className="topicPopoverNotice">{lessonSuccess}</div> : null}
+                      {selectedLessons.length ? (
+                        <div className="topicPopoverLessonList">
+                          {[...selectedLessons].reverse().map((lesson, index) => (
+                            <details key={lesson.id} className="topicPopoverLesson">
+                              <summary>
+                                <span className="topicPopoverLessonTitle">{lesson.title}</span>
+                                <span className="topicPopoverArtifactKind">{copy.topic.lessonVersion(selectedLessons.length - index)}</span>
+                              </summary>
+                              <div className="topicPopoverLessonBody"><AssistantMarkdown content={lesson.body} /></div>
+                            </details>
+                          ))}
+                        </div>
+                      ) : <div className="topicPopoverEmpty">{copy.topic.noLessons}</div>}
+                    </div>
+                    <div className="topicPopoverSection">
+                      <div className="topicPopoverSectionHeader">
                         <div className="topicPopoverLabel">{copy.topic.artifacts}</div>
                         <button
                           className="topicPopoverInlineAddButton"
@@ -1403,9 +1461,9 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
                           <Plus size={12} weight="bold" aria-hidden="true" />
                         </button>
                       </div>
-                      {selectedArtifacts.length > 0 ? (
+                      {selectedOtherArtifacts.length > 0 ? (
                         <div className="topicPopoverList">
-                          {selectedArtifacts.map((artifact) => (
+                          {selectedOtherArtifacts.map((artifact) => (
                             <div key={artifact.id} className="topicPopoverArtifact">
                               <div className="topicPopoverArtifactTitle">
                                 <span>{artifact.title}</span>
@@ -1424,11 +1482,17 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
                         <div className="topicPopoverLabel">{copy.topic.closure}</div>
                         {selectedClosureStatus.latest_attempt ? (
                           <div className="topicPopoverMeta">
-                            <span className="topicPopoverMetaItem">{copy.closure.latestQuiz(selectedClosureStatus.latest_attempt.score * 100)}</span>
-                            <span className={`topicPopoverState topicPopoverState-${selectedClosureStatus.latest_attempt.passed ? "good" : "bad"}`}>
-                              {selectedClosureStatus.latest_attempt.passed ? copy.closure.passed : copy.closure.failed}
+                            <span className="topicPopoverMetaItem">
+                              {selectedClosureStatus.latest_attempt.source === "manual" || selectedClosureStatus.latest_attempt.id.startsWith("manual-")
+                                ? copy.closure.completedManually
+                                : copy.closure.latestQuiz(selectedClosureStatus.latest_attempt.score * 100)}
                             </span>
-                            {!selectedClosureStatus.latest_attempt.passed && selectedClosureStatus.latest_attempt.fail_count > 0 ? (
+                            {selectedClosureStatus.latest_attempt.source === "manual" || selectedClosureStatus.latest_attempt.id.startsWith("manual-") ? null : (
+                              <span className={`topicPopoverState topicPopoverState-${selectedClosureStatus.latest_attempt.passed ? "good" : "bad"}`}>
+                                {selectedClosureStatus.latest_attempt.passed ? copy.closure.passed : copy.closure.failed}
+                              </span>
+                            )}
+                            {selectedClosureStatus.latest_attempt.source !== "manual" && !selectedClosureStatus.latest_attempt.id.startsWith("manual-") && !selectedClosureStatus.latest_attempt.passed && selectedClosureStatus.latest_attempt.fail_count > 0 ? (
                               <span className="topicPopoverMetaItem">{copy.closure.failedCount(selectedClosureStatus.latest_attempt.fail_count)}</span>
                             ) : null}
                           </div>
@@ -1462,6 +1526,12 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
                         ) : null}
                       </div>
                     ) : null}
+                    <div className="topicPopoverSection topicPopoverHistory">
+                      <button className="topicPopoverHistoryButton" type="button" onClick={openQuizReportHistory}>
+                        Ver relatórios anteriores
+                      </button>
+                    </div>
+                    <LearningGuidance plan={learningPlan} topicId={selectedTopic.id} titles={topicTitlesById} copy={copy} />
                   </div>
                 ) : null}
               </div>
@@ -1561,6 +1631,12 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
                 style={{ left: `${dockPosition.x}px`, top: `${dockPosition.y}px` }}
               >
                 <div className="lightDockGrip" onPointerDown={(event) => beginFloatingDrag("dock", event)}><ClewLogo size={24} /></div>
+                <button className="lightDockButton" onClick={openRoadmapStudio} title="Criar roadmap" aria-label="Criar roadmap" type="button">
+                  <MapTrifold size={21} weight={getDockIconWeight(false)} />
+                </button>
+                <button className="lightDockButton" onClick={openLearnerProfile} title="Meu perfil" aria-label="Meu perfil" type="button">
+                  <UserCircle size={21} weight={getDockIconWeight(false)} />
+                </button>
                 <button
                   className={`lightDockButton ${lightWorkspacePanelOpen ? "lightDockButtonActive" : ""}`}
                   onClick={toggleExperimentalWorkspaceWindow}
@@ -1580,7 +1656,7 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
                 <button className={`lightDockButton ${isSettingsOpen ? "lightDockButtonActive" : ""}`} onClick={openConfigurationSettings} title={copy.shell.configuration} type="button">
                   <GearSix size={21} weight={getDockIconWeight(isSettingsOpen)} />
                 </button>
-                <a className="lightDockButton lightDockButtonLink" href="https://clew.my/docs" rel="noreferrer" target="_blank" title={copy.sidebar.documentation}>
+                <a className="lightDockButton lightDockButtonLink" href="https://clew.my/docs" rel="noreferrer" target="_blank" title="Original Clew documentation">
                   <BookBookmark size={21} weight={getDockIconWeight(false)} />
                 </a>
                 {debugModeEnabled ? (
@@ -1600,6 +1676,12 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
             const workspaceActive = !assistantOpen && !mobileMenuOpen && !isSettingsOpen;
             return (
           <div className="lightDock lightDockHorizontal">
+            <button className="lightDockButton" type="button" aria-label="Criar roadmap" title="Criar roadmap" onClick={openRoadmapStudio}>
+              <MapTrifold size={21} weight="regular" />
+            </button>
+            <button className="lightDockButton" type="button" aria-label="Meu perfil" title="Meu perfil" onClick={openLearnerProfile}>
+              <UserCircle size={21} weight="regular" />
+            </button>
             <button
               className={`lightDockButton ${workspaceActive ? "lightDockButtonActive" : ""}`}
               type="button"

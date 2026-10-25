@@ -19,6 +19,7 @@ function deferred<T>() {
 let root: Root;
 let controller: ChatGPTAccountController;
 function Harness() { controller = useChatGPTAccount(); return null; }
+function ManualHarness() { controller = useChatGPTAccount(false); return null; }
 async function mount(account = signedIn) {
   request.mockResolvedValueOnce(response(account));
   await act(async () => { root.render(<Harness />); });
@@ -32,6 +33,16 @@ beforeEach(() => {
 afterEach(async () => { await act(async () => root.unmount()); vi.unstubAllGlobals(); });
 
 describe("ChatGPT account lifecycle", () => {
+  it("does not contact ChatGPT automatically in a Ruflo-native workspace", async () => {
+    await act(async () => { root.render(<ManualHarness />); });
+    expect(controller.loading).toBe(false);
+    expect(request).not.toHaveBeenCalled();
+    request.mockResolvedValueOnce(response(signedOut));
+    await act(async () => { await controller.refresh(); });
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(controller.account).toEqual(signedOut);
+  });
+
   it("deduplicates overlapping focus and status refreshes", async () => {
     await mount();
     const pending = deferred<Response>();

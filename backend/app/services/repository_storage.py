@@ -44,6 +44,31 @@ def init_repository_storage(conn: sqlite3.Connection) -> None:
         )
         """
     )
+    # Additive migration: existing quiz sessions and graph snapshots remain intact.
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS quiz_study_drafts (
+            session_id TEXT PRIMARY KEY,
+            revision INTEGER NOT NULL,
+            updated_at TEXT NOT NULL,
+            payload_json TEXT NOT NULL
+        )
+    """)
+    # Versioned audit records are committed with the quiz snapshot. Graph deletion
+    # purges them; workspace rollback preserves them as historical evidence.
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS quiz_pedagogical_reports (
+            attempt_id TEXT PRIMARY KEY,
+            graph_id TEXT NOT NULL,
+            topic_id TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            format_version INTEGER NOT NULL,
+            payload_json TEXT NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_quiz_reports_graph_topic_date
+        ON quiz_pedagogical_reports(graph_id, topic_id, created_at DESC, attempt_id DESC)
+    """)
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS chat_sessions (
@@ -173,7 +198,9 @@ def purge_graph_runtime_state(conn: sqlite3.Connection, graph_id: str) -> None:
         conn.execute("DELETE FROM agent_transcripts WHERE session_id IN (SELECT session_id FROM chat_sessions WHERE graph_id=?)", (graph_id,))
     conn.execute("DELETE FROM chat_messages WHERE graph_id = ?", (graph_id,))
     conn.execute("DELETE FROM chat_sessions WHERE graph_id = ?", (graph_id,))
+    conn.execute("DELETE FROM quiz_study_drafts WHERE session_id IN (SELECT session_id FROM quiz_sessions WHERE graph_id = ?)", (graph_id,))
     conn.execute("DELETE FROM quiz_sessions WHERE graph_id = ?", (graph_id,))
+    conn.execute("DELETE FROM quiz_pedagogical_reports WHERE graph_id = ?", (graph_id,))
 
 
 def snapshot_workspace_document(workspace: WorkspaceDocument) -> WorkspaceDocument:

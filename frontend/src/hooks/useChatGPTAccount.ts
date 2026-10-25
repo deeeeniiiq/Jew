@@ -12,9 +12,9 @@ export async function chatgptRequest<T>(path: string, body?: object): Promise<T>
   return result as T;
 }
 
-export function useChatGPTAccount() {
+export function useChatGPTAccount(autoRefresh = true) {
   const [account, setAccount] = useState<ChatGPTAccount | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(autoRefresh);
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const inFlight = useRef<Promise<void> | null>(null);
@@ -35,7 +35,7 @@ export function useChatGPTAccount() {
       } catch (cause) {
         if (started === generation.current) {
           setAccount(null);
-          setError(cause instanceof Error ? cause.message : "Could not reach Clew.");
+          setError(cause instanceof Error ? cause.message : "Could not reach Jew.");
         }
       } finally {
         if (started === generation.current) setLoading(false);
@@ -45,7 +45,7 @@ export function useChatGPTAccount() {
     inFlight.current = pending;
     return pending;
   }, []);
-  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => { if (autoRefresh) void refresh(); }, [autoRefresh, refresh]);
   useEffect(() => {
     if (!account?.login) return;
     const timer = window.setInterval(() => void refresh(), 1500);
@@ -75,7 +75,7 @@ export function useChatGPTAccount() {
     // The browser popup must open inside the click, before the OAuth request.
     const popup = window.clewDesktop ? null : window.open("about:blank", "clew-chatgpt-login");
     if (!window.clewDesktop && !popup) {
-      setError("Allow popups for Clew, then try signing in again.");
+      setError("Allow popups for Jew, then try signing in again.");
       return;
     }
     if (popup) popup.opener = null;

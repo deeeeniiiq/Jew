@@ -37,7 +37,7 @@ class ChatGPTError(RuntimeError):
 
 # Messages for documented Sign in with ChatGPT error codes. Unknown codes keep the server message.
 API_ERRORS = {
-    "subscription_sharing_user_not_eligible": "This ChatGPT account cannot share its plan with apps. Clew requires ChatGPT Plus or Pro.",
+    "subscription_sharing_user_not_eligible": "This ChatGPT account cannot share its plan with apps. Use Ollama locally or configure an OpenAI API key in Jew settings.",
     "subscription_sharing_usage_limit_exceeded": "Your ChatGPT plan limit for apps has been reached. Check usage in ChatGPT Settings.",
     "subscription_sharing_usage_unavailable": "ChatGPT usage could not be checked. Try again shortly.",
     "subscription_sharing_unsupported_capability": "ChatGPT plan sharing does not support a capability this request uses.",
@@ -61,7 +61,7 @@ REJECTED_CREDENTIALS = {"invalid_grant", "invalid_refresh_token", "refresh_token
 
 
 def transport_error(exc: httpx.HTTPError) -> ChatGPTError:
-    return ChatGPTError("transport_error", "Clew could not reach ChatGPT. Check your connection and try again.", retryable=True)
+    return ChatGPTError("transport_error", "Jew could not reach ChatGPT. Check your connection and try again.", retryable=True)
 
 
 def api_error(body: object, status: int | None = None) -> ChatGPTError:
@@ -107,7 +107,7 @@ class KeyringCredentialStore:
         except keyring.errors.KeyringError as exc:
             raise ChatGPTError("credential_storage_unavailable", "The OS credential store could not be opened.") from exc
         if isinstance(backend, FailKeyring) or getattr(backend, "priority", 1) <= 0:
-            raise ChatGPTError("credential_storage_unavailable", "No OS credential store is available, so Clew cannot keep a ChatGPT sign-in.")
+            raise ChatGPTError("credential_storage_unavailable", "No OS credential store is available, so Jew cannot keep a ChatGPT sign-in.")
         return keyring
 
     def read(self) -> dict | None:
@@ -178,11 +178,13 @@ class ChatGPTAuth:
     account label are not secret and live next to the local database."""
 
     def __init__(self, *, redirect_uri: str, registration_path: Path, store: CredentialStore | None = None,
-                 http: httpx.AsyncClient | None = None, app_name: str = "Clew"):
+                 http: httpx.AsyncClient | None = None, app_name: str = "Jew"):
         self.redirect_uri = redirect_uri
         self.registration_path = registration_path
         self.store = store or KeyringCredentialStore()
-        self.http = http or httpx.AsyncClient(timeout=httpx.Timeout(30, read=180))
+        # Ruflo-native workspaces must start even when HTTPS/CA configuration is
+        # unavailable. Construct the OAuth transport only on explicit GPT use.
+        self._http = http
         self.app_name = app_name
         self.pending: PendingLogin | None = None
         self.completing: PendingLogin | None = None
@@ -194,9 +196,19 @@ class ChatGPTAuth:
         self._generation = 0
         self._login_generation = 0
 
+    @property
+    def http(self) -> httpx.AsyncClient:
+        if self._http is None:
+            self._http = httpx.AsyncClient(timeout=httpx.Timeout(30, read=180))
+        return self._http
+
+    @http.setter
+    def http(self, value: httpx.AsyncClient) -> None:
+        self._http = value
+
     def _check_generation(self, generation: int, *, login: bool = False) -> None:
         if generation != (self._login_generation if login else self._generation):
-            raise ChatGPTError("connection_changed", "The ChatGPT connection changed while this request was running. Try again from Clew.")
+            raise ChatGPTError("connection_changed", "The ChatGPT connection changed while this request was running. Try again from Jew.")
 
     async def _request(self, method: str, url: str, **kwargs) -> httpx.Response:
         try:
@@ -366,13 +378,13 @@ class ChatGPTAuth:
         states = query.get("state", [])
         if (pending is None or len(states) != 1 or not states[0].isascii()
                 or not hmac.compare_digest(states[0], pending.state)):
-            raise ChatGPTError("invalid_state", "This sign-in link is not the one Clew started. Start sign-in again from Clew.")
+            raise ChatGPTError("invalid_state", "This sign-in link is not the one Jew started. Start sign-in again from Jew.")
         self.pending = None
         self.completing = pending
         generation = self._login_generation
         try:
             if time.time() - pending.created_at > LOGIN_TTL_SECONDS:
-                raise ChatGPTError("login_expired", "Sign-in took too long. Start it again from Clew.")
+                raise ChatGPTError("login_expired", "Sign-in took too long. Start it again from Jew.")
             if query.get("error"):
                 raise api_error({"error": query["error"][0], "error_description": (query.get("error_description") or [None])[0]})
             codes, client_ids = query.get("code", []), query.get("client_id", [])
@@ -382,8 +394,10 @@ class ChatGPTAuth:
                     or not all(c.isalnum() or c in "-_" for c in client_id) or len(client_id) > 200
                     or (saved and client_ids and client_ids[0] != saved)):
                 raise ChatGPTError("registration_incomplete", "ChatGPT did not complete app registration. Try signing in again.")
-            # Keep the issued registration before the one-time code exchange can fail.
-            self._save_registration(client_id=client_id)
+            # Keep a first-time dynamic registration if token exchange fails.
+            # Never replace an existing connection's client ID before success.
+            if not self.registration().get("client_id"):
+                self._save_registration(client_id=client_id)
             data = await self._token_request({"grant_type": "authorization_code", "client_id": client_id,
                                               "code": codes[0], "code_verifier": pending.verifier,
                                               "redirect_uri": pending.redirect_uri, "resource": RESOURCE})
@@ -395,13 +409,36 @@ class ChatGPTAuth:
                 raise ChatGPTError("account_mismatch", "This sign-in does not match the registered ChatGPT account.")
             credentials = self._credentials(data)
             self._generation += 1
-            self._save_registration(subject=identity["subject"], email=identity["email"], name=identity["name"])
+            try:
+                previous = self.store.read()
+            except ChatGPTError as exc:
+                if exc.code != "credential_storage_corrupt":
+                    raise
+                # A new, verified login may replace unreadable old credentials.
+                previous = None
             self.store.write({"client_id": client_id, "subject": identity["subject"],
                               "id_token": data["id_token"], **credentials})
+            try:
+                self._save_registration(client_id=client_id, subject=identity["subject"],
+                                        email=identity["email"], name=identity["name"])
+            except Exception:
+                # Registration is a separate file. Restore the previous token
+                # set when that file cannot be updated.
+                if previous is None:
+                    self.store.delete()
+                else:
+                    self.store.write(previous)
+                raise
             self.last_error = None
         except ChatGPTError as exc:
             if generation == self._login_generation:
                 self.last_error = str(exc)
+            raise
+        except Exception:
+            # The callback presents a safe error page; make the same failure
+            # visible in Jew after the browser tab is closed.
+            if generation == self._login_generation:
+                self.last_error = "Jew could not finish saving the ChatGPT sign-in. Try again from Jew."
             raise
         finally:
             if self.completing is pending:
@@ -424,7 +461,7 @@ class ChatGPTAuth:
         registration = self.registration()
         if (connection["client_id"] != registration.get("client_id")
                 or connection["subject"] != registration.get("subject")):
-            raise ChatGPTError("credential_storage_corrupt", "The saved ChatGPT connection does not match this Clew install. Sign out and sign in again.")
+            raise ChatGPTError("credential_storage_corrupt", "The saved ChatGPT connection does not match this Jew install. Sign out and sign in again.")
         return connection
 
     def status(self) -> dict:
@@ -439,14 +476,14 @@ class ChatGPTAuth:
         sharing = SHARING_SCOPE in connection.get("scopes", [])
         return {"authenticated": True, "sharing": sharing, "can_disconnect": True,
                 "account": {"email": registration.get("email"), "name": registration.get("name")},
-                "error": self.last_error or (None if sharing else "Plan sharing was not granted. Sign in again and allow Clew to use your ChatGPT plan.")}
+                "error": self.last_error or (None if sharing else "Plan sharing was not granted. Sign in again and allow Jew to use your ChatGPT plan.")}
 
     async def access_token(self) -> str:
         connection = self.connection()
         if connection is None:
             raise ChatGPTError("not_signed_in", "Sign in with ChatGPT to start a conversation.")
         if SHARING_SCOPE not in connection.get("scopes", []):
-            raise ChatGPTError("sharing_not_granted", "Plan sharing was not granted. Sign in again and allow Clew to use your ChatGPT plan.")
+            raise ChatGPTError("sharing_not_granted", "Plan sharing was not granted. Sign in again and allow Jew to use your ChatGPT plan.")
         if connection["expires_at"] - REFRESH_MARGIN_SECONDS > time.time():
             return connection["access_token"]
         async with self._refresh_lock:
@@ -454,7 +491,7 @@ class ChatGPTAuth:
             if connection is None:
                 raise ChatGPTError("not_signed_in", "Sign in with ChatGPT to start a conversation.")
             if SHARING_SCOPE not in connection["scopes"]:
-                raise ChatGPTError("sharing_not_granted", "Plan sharing was not granted. Sign in again and allow Clew to use your ChatGPT plan.")
+                raise ChatGPTError("sharing_not_granted", "Plan sharing was not granted. Sign in again and allow Jew to use your ChatGPT plan.")
             if connection["expires_at"] - REFRESH_MARGIN_SECONDS > time.time():
                 return connection["access_token"]
             generation = self._generation
@@ -480,7 +517,7 @@ class ChatGPTAuth:
                 raise
             self.store.write({**connection, **credentials})
             if SHARING_SCOPE not in credentials["scopes"]:
-                raise ChatGPTError("sharing_not_granted", "Plan sharing was not granted. Sign in again and allow Clew to use your ChatGPT plan.")
+                raise ChatGPTError("sharing_not_granted", "Plan sharing was not granted. Sign in again and allow Jew to use your ChatGPT plan.")
             return credentials["access_token"]
 
     def reject_token(self, token: str, error: ChatGPTError) -> None:
@@ -499,7 +536,7 @@ class ChatGPTAuth:
         self._generation += 1
         self.cancel_login()
         self.last_error = None
-        warning = "Local credentials were removed, but ChatGPT did not confirm the disconnect. Remove Clew in ChatGPT Settings → Connected apps."
+        warning = "Local credentials were removed, but ChatGPT did not confirm the disconnect. Remove the Jew connection (possibly listed as Clew for older installs) in ChatGPT Settings → Connected apps."
         try:
             connection = self.store.read()
         except ChatGPTError:
@@ -521,4 +558,5 @@ class ChatGPTAuth:
             return warning
 
     async def close(self) -> None:
-        await self.http.aclose()
+        if self._http is not None:
+            await self._http.aclose()

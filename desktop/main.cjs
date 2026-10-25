@@ -5,6 +5,7 @@ const { launchBackend } = require('./backend.cjs');
 const { APP_URL, applicationUrl, externalUrl, trustedFrame } = require('./security.cjs');
 const { createProtocolHandler, fetchBackend } = require('./protocol.cjs');
 const { createLogger, redact } = require('./logging.cjs');
+const { preferredUserData } = require('./profile.cjs');
 const { checkLatestRelease } = require('./updates.cjs');
 const { validateExport, writeExport, nativeCommit } = require('./export.cjs');
 
@@ -21,10 +22,18 @@ let exporting = false;
 let log = value => process.stderr.write(`${redact(value)}\n`);
 const root = path.join(__dirname, '..');
 const smokePath = process.env.CLEW_SMOKE_REPORT;
-const python = process.env.CLEW_PYTHON || path.join(root, '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
+const pythonExecutable = process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python';
+const verifiedPython = path.join(root, '.venv-official', pythonExecutable);
+const defaultPython = path.join(root, '.venv', pythonExecutable);
+const python = process.env.CLEW_PYTHON || (fs.existsSync(verifiedPython) ? verifiedPython : defaultPython);
 if (smokePath && process.env.CLEW_SMOKE_DATA_DIR) {
   app.setPath('userData', process.env.CLEW_SMOKE_DATA_DIR);
   app.setAppLogsPath(path.join(process.env.CLEW_SMOKE_DATA_DIR, 'logs'));
+} else if (process.platform === 'win32') {
+  // Keep an existing Jew workspace when both apps have data, otherwise
+  // reuse the legacy Clew profile without copying or modifying its database.
+  const profile = preferredUserData(app.getPath('appData'), app.getPath('userData'));
+  if (profile !== app.getPath('userData')) app.setPath('userData', profile);
 }
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
@@ -42,7 +51,7 @@ async function fatal(error) {
     fs.mkdirSync(path.dirname(smokePath), { recursive: true });
     fs.writeFileSync(smokePath, JSON.stringify({ ...previous, ok: false, error: redact(error.message) }, null, 2));
   }
-  else dialog.showErrorBox('Clew could not continue', `${redact(error.message)}\n\nLogs: ${app.getPath('logs')}`);
+  else dialog.showErrorBox('Jew could not continue', `${redact(error.message)}\n\nLogs: ${app.getPath('logs')}`);
   process.exitCode = 1;
   app.quit();
 }
@@ -51,7 +60,7 @@ async function start() {
   log = createLogger(app.getPath('logs'));
   backend = launchBackend({ root, resources: process.resourcesPath, dataDir: path.join(app.getPath('userData'), 'data'),
     logsDir: app.getPath('logs'), packaged: app.isPackaged, log, version: app.getVersion(),
-    onExit: (code, signal) => { if (!quitting) void fatal(new Error(`The local backend stopped (${code ?? signal}). Restart Clew.`)); },
+    onExit: (code, signal) => { if (!quitting) void fatal(new Error(`The local backend stopped (${code ?? signal}). Restart Jew.`)); },
     python });
   const connection = await backend.startup;
   const bootstrap = { ...connection, apiBase: 'clew://app', version: app.getVersion(), platform: process.platform };
@@ -78,7 +87,7 @@ async function start() {
     } finally { exporting = false; }
   });
   mainWindow = new BrowserWindow({ width: 1400, height: 920, minWidth: 860, minHeight: 620, show: false,
-    title: 'Clew', backgroundColor: '#000000', autoHideMenuBar: true,
+    title: 'Jew', backgroundColor: '#000000', autoHideMenuBar: true,
     icon: path.join(__dirname, 'assets', 'icon.png'),
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), sandbox: true, contextIsolation: true,
       nodeIntegration: false, webSecurity: true,
@@ -86,7 +95,7 @@ async function start() {
   });
   mainWindow.webContents.on('preload-error', (_event, _path, error) => void fatal(new Error(`The desktop bridge failed: ${error.message}`)));
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
-    if (!quitting) void fatal(new Error(`The renderer stopped (${details.reason}). Restart Clew.`));
+    if (!quitting) void fatal(new Error(`The renderer stopped (${details.reason}). Restart Jew.`));
   });
   mainWindow.webContents.session.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
   mainWindow.webContents.session.setPermissionCheckHandler(() => false);
@@ -105,17 +114,18 @@ async function start() {
   mainWindow.once('ready-to-show', () => { if (!smokePath) mainWindow.show(); });
   mainWindow.on('closed', () => { mainWindow = null; });
   Menu.setApplicationMenu(Menu.buildFromTemplate([
-    ...(process.platform === 'darwin' ? [{ label: 'Clew', submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { type: 'separator' }, { role: 'quit' }] }] : []),
+    ...(process.platform === 'darwin' ? [{ label: 'Jew', submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { type: 'separator' }, { role: 'quit' }] }] : []),
     ...(process.platform !== 'darwin' ? [{ label: 'File', submenu: [{ role: 'close' }, { type: 'separator' }, { role: 'quit' }] }] : []),
     { label: 'Edit', submenu: [{ role: 'undo' }, { role: 'redo' }, { type: 'separator' }, { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }] },
     { label: 'View', submenu: [{ role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'togglefullscreen' }] },
     { role: 'windowMenu' },
     { label: 'Help', submenu: [
-      { label: 'Documentation', click: () => void openWeb('https://clew.my/docs') },
+      { label: 'Original Clew Documentation', click: () => void openWeb('https://clew.my/docs') },
       { label: 'Check for Updates…', click: checkForUpdates },
       { label: 'Open Data Folder', click: () => void openFolder(app.getPath('userData')) },
       { label: 'Open Logs', click: () => void openFolder(app.getPath('logs')) },
-      { label: 'Report an Issue', click: () => void openWeb('https://github.com/miuuyy/Clew/issues') }
+      ...(process.env.JEW_GITHUB_REPOSITORY && /^[A-Za-z0-9-]+\/[A-Za-z0-9_.-]+$/.test(process.env.JEW_GITHUB_REPOSITORY)
+        ? [{ label: 'Report an Issue', click: () => void openWeb(`https://github.com/${process.env.JEW_GITHUB_REPOSITORY}/issues`) }] : [])
     ] }
   ]));
   await mainWindow.loadURL(APP_URL);
@@ -128,9 +138,9 @@ async function checkForUpdates() {
   checkingUpdates = true;
   try {
     const result = await checkLatestRelease(app.getVersion(), process.platform, process.arch);
-    if (!result.available) { await dialog.showMessageBox({ message: 'Clew is up to date.' }); return; }
-    const { response } = await dialog.showMessageBox({ message: `Clew ${result.version} is available.`,
-      detail: 'Download the installer from the release page, close Clew, and install it. Your local data is retained.',
+    if (!result.available) { await dialog.showMessageBox({ message: 'Jew is up to date.' }); return; }
+    const { response } = await dialog.showMessageBox({ message: `Jew ${result.version} is available.`,
+      detail: 'Download the installer from the release page, close Jew, and install it. Your local data is retained.',
       buttons: ['View Release', 'Later'], cancelId: 1 });
     if (response === 0) await openWeb(result.url);
   } catch (error) { dialog.showErrorBox('Could not check for updates', redact(error.message)); }
@@ -159,8 +169,8 @@ async function smoke(bootstrap) {
   const deadline = Date.now() + 20000;
   let visible;
   do {
-    visible = await mainWindow.webContents.executeJavaScript(`({ title: document.title, text: document.body.innerText, isolated: typeof require === 'undefined', bridge: !!window.clewDesktop, origin: location.origin, secure: isSecureContext, ready: !!document.querySelector('.signInContinue:not(:disabled)'), svgReady: (document.querySelector('.signInMark use')?.getBBox().width ?? 0) > 0, whiteMark: !!document.querySelector('.signInMark') && getComputedStyle(document.querySelector('.signInMark')).color === 'rgb(255, 255, 255)', github: !!document.querySelector('a[aria-label="Star on GitHub"]'), x: !!document.querySelector('a[aria-label="Follow on X"]') })`);
-    if (visible.ready && visible.svgReady) break;
+    visible = await mainWindow.webContents.executeJavaScript(`({ title: document.title, text: document.body.innerText, isolated: typeof require === 'undefined', bridge: !!window.clewDesktop, origin: location.origin, secure: isSecureContext, ready: !!document.querySelector('.workspaceShell, .workspaceMain'), error: !!document.querySelector('.launchError') })`);
+    if (visible.ready || visible.error) break;
     await new Promise(resolve => setTimeout(resolve, 100));
   } while (Date.now() < deadline);
   const rendererAccess = await mainWindow.webContents.executeJavaScript(`(async () => {
@@ -188,14 +198,14 @@ async function smoke(bootstrap) {
   const sandbox = preferences.sandbox && preferences.contextIsolation && !preferences.nodeIntegration && preferences.webSecurity;
   const ok = health.ok && blocked.status === 403 && rendererAccess === 200 && cors && exportCommit && sandbox && persisted
     && visible.origin === 'clew://app' && visible.secure && visible.isolated && visible.bridge && visible.ready
-    && visible.text.includes('Continue with ChatGPT') && visible.github && visible.x && visible.whiteMark && visible.svgReady;
+    && !visible.error;
   fs.writeFileSync(smokePath, JSON.stringify({ ok, version: app.getVersion(), platform: process.platform, arch: process.arch,
     health: health.status, blocked: blocked.status, rendererAccess, cors, exportCommit, origin: visible.origin, secure: visible.secure,
-    sandbox, persisted, whiteMark: visible.whiteMark, svgReady: visible.svgReady, storagePhase: process.env.CLEW_SMOKE_STORAGE_PHASE, isolated: visible.isolated,
+    sandbox, persisted, storagePhase: process.env.CLEW_SMOKE_STORAGE_PHASE, isolated: visible.isolated,
     bridge: visible.bridge, onboarding: visible.text }, null, 2));
   const image = await mainWindow.webContents.capturePage();
   fs.writeFileSync(smokePath.replace(/\.json$/, '.png'), image.toPNG());
-  if (!ok) throw new Error('Packaged onboarding smoke check failed.');
+  if (!ok) throw new Error('Packaged workspace smoke check failed.');
   app.quit();
 }
 

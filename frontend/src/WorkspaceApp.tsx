@@ -5,6 +5,9 @@ import { AppDialogs } from "./components/AppDialogs";
 import { DebugLogsModal } from "./components/DebugLogsModal";
 import { SettingsModal } from "./components/SettingsModal";
 import { WorkspaceShell } from "./components/WorkspaceShell";
+import { LearnerOnboarding, EMPTY_LEARNER_PROFILE } from "./components/roadmap/LearnerOnboarding";
+import { RoadmapStudio } from "./components/roadmap/RoadmapStudio";
+import { StudyReportHistory } from "./components/study/StudyReportHistory";
 import { ClewLoader } from "./components/ClewLoader";
 import { API_BASE } from "./lib/api";
 import { APP_COPY } from "./lib/appCopy";
@@ -40,19 +43,24 @@ import { useWorkspaceChromeState } from "./hooks/useWorkspaceChromeState";
 import { useTopicPopover } from "./hooks/useTopicPopover";
 import { useModalAccessibility } from "./lib/useModalAccessibility";
 import type {
+  Artifact,
   CreateGraphRequest,
   GraphEnvelope,
   GraphAssessment,
+  LearningPlan,
   GraphExportFormat,
   GraphExportPackagePayload,
   ObsidianExportOptions,
   ObsidianGraphExportPackagePayload,
   ProposalGenerateResponse,
   QuizQuestionReview,
+  QuizPedagogicalReport,
   QuizStartResponse,
   QuizSubmitResponse,
   DebugLogSnapshot,
+  ChatGPTModel,
   SnapshotRecord,
+  LearnerProfile,
   TopicQuizSession,
   WorkspaceEnvelope,
 } from "./lib/types";
@@ -71,6 +79,11 @@ function defaultObsidianExportOptions(): ObsidianExportOptions {
 export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountController }): React.JSX.Element {
   const copy = APP_COPY;
   const [data, setData] = useState<WorkspaceEnvelope | null>(null);
+  const [learnerProfile, setLearnerProfile] = useState<LearnerProfile>(EMPTY_LEARNER_PROFILE);
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const [roadmapStudioOpen, setRoadmapStudioOpen] = useState(false);
+  const [providerCatalog, setProviderCatalog] = useState<{ provider: string; models: ChatGPTModel[] } | null>(null);
+  const [providerRefresh, setProviderRefresh] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [projectsExpanded, setProjectsExpanded] = useState(true);
@@ -137,12 +150,22 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
   const [applyError, setApplyError] = useState<string | null>(null);
   const [assistantResizing, setAssistantResizing] = useState(false);
   const [configSaving, setConfigSaving] = useState(false);
+  const [learningPlan, setLearningPlan] = useState<LearningPlan | null>(null);
   const [quizSession, setQuizSession] = useState<TopicQuizSession | null>(null);
   const [quizAnswers, setQuizAnswers] = useState<Record<string, number>>({});
   const [quizLoading, setQuizLoading] = useState(false);
   const [quizError, setQuizError] = useState<string | null>(null);
   const [quizSuccess, setQuizSuccess] = useState<string | null>(null);
   const [quizReviews, setQuizReviews] = useState<QuizQuestionReview[] | null>(null);
+  const [quizReport, setQuizReport] = useState<QuizPedagogicalReport | null>(null);
+  const [reportHistoryTarget, setReportHistoryTarget] = useState<{
+    graphId: string;
+    topicId: string;
+    topicTitle: string;
+  } | null>(null);
+  const [lessonLoading, setLessonLoading] = useState(false);
+  const [lessonError, setLessonError] = useState<string | null>(null);
+  const [lessonSuccess, setLessonSuccess] = useState<string | null>(null);
   const [workspaceSurface, setWorkspaceSurface] = useState<WorkspaceSurfacePayload | null>(null);
   const [debugLogs, setDebugLogs] = useState<DebugLogSnapshot | null>(null);
   const [debugLogsLoading, setDebugLogsLoading] = useState(false);
@@ -188,6 +211,7 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
   const quizModalRef = useRef<HTMLDivElement | null>(null);
   const quizCloseButtonRef = useRef<HTMLButtonElement | null>(null);
   const quizRequestRef = useRef(0);
+  const lessonRequestRef = useRef(0);
   const chatViewportRef = useRef<HTMLDivElement | null>(null);
   const chatComposerRef = useRef<HTMLTextAreaElement | null>(null);
   const sessionListRef = useRef<HTMLDivElement | null>(null);
@@ -260,6 +284,7 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
     quizRequestRef.current += 1;
     setQuizLoading(false);
     setQuizSession(null);
+    setQuizReport(null);
     setQuizError(null);
   }, []);
 
@@ -302,7 +327,8 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
   useModalAccessibility({
     isOpen: Boolean(quizSession),
     modalRef: quizModalRef,
-    onClose: closeQuizModal,
+    // Escape follows the StudyWorkspace close button's save-before-exit path.
+    onClose: () => { if (quizCloseButtonRef.current) quizCloseButtonRef.current.click(); else closeQuizModal(); },
     initialFocusRef: quizCloseButtonRef,
   });
 
@@ -335,6 +361,9 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
       try {
         const payload = await fetchWorkspace();
         setData(payload);
+        const profile = payload.workspace.learner_profile ?? EMPTY_LEARNER_PROFILE;
+        setLearnerProfile(profile);
+        setOnboardingOpen(!profile.onboarding_complete);
         const fallbackGraphId = payload.workspace.active_graph_id ?? payload.workspace.graphs[0]?.graph_id ?? null;
         setActiveGraphId((previous) => previous ?? fallbackGraphId);
       } catch (loadError) {
@@ -381,15 +410,25 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
     handleSelectedTopicAnchorChange,
     handleSelectTopic,
   } = useTopicPopover({ activeGraph, isMobileViewport, graphShellRef });
+  const openQuizReportHistory = () => {
+    if (!activeGraph || !selectedTopic) return;
+    setReportHistoryTarget({ graphId: activeGraph.graph_id, topicId: selectedTopic.id, topicTitle: selectedTopic.title });
+  };
   useLayoutEffect(() => {
+    setReportHistoryTarget(null);
     quizRequestRef.current += 1;
+    lessonRequestRef.current += 1;
+    setLessonLoading(false);
+    setLessonError(null);
+    setLessonSuccess(null);
     setQuizLoading(false);
     setQuizSession((session) => session && session.graph_id === activeGraph?.graph_id && session.topic_id === selectedTopicId ? session : null);
     setQuizAnswers({});
     setQuizReviews(null);
+    setQuizReport(null);
     setQuizError(null);
     setQuizSuccess(null);
-    return () => { quizRequestRef.current += 1; };
+    return () => { quizRequestRef.current += 1; lessonRequestRef.current += 1; };
   }, [activeGraph?.graph_id, selectedTopicId]);
 
   useEffect(() => {
@@ -399,6 +438,7 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
     setQuizError(null);
     setQuizSuccess(null);
     setQuizReviews(null);
+    setQuizReport(null);
     setGraphLayoutEditing(false);
     setGraphLayoutDraft(null);
   }, [activeGraph?.graph_id]);
@@ -435,10 +475,46 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
   });
   const { disableIdleAnimations: disableIdleAnimationsDraft } = settingsState.drafts;
 
+  const provider = currentConfig?.agent_backend ?? "ruflo_native";
+  useEffect(() => {
+    if (provider !== "chatgpt") return;
+    const refresh = () => void chatgpt.refresh();
+    refresh();
+    window.addEventListener("clew-sign-in-required", refresh);
+    window.addEventListener("focus", refresh);
+    return () => {
+      window.removeEventListener("clew-sign-in-required", refresh);
+      window.removeEventListener("focus", refresh);
+    };
+  }, [provider, chatgpt.refresh]);
+  useEffect(() => {
+    const refresh = () => setProviderRefresh((value) => value + 1);
+    window.addEventListener("jew-agent-refresh", refresh);
+    return () => window.removeEventListener("jew-agent-refresh", refresh);
+  }, []);
+  useEffect(() => {
+    if (provider === "chatgpt") return;
+    const controller = new AbortController();
+    void apiFetch(`${API_BASE}/api/v1/agent/models`, { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(await readErrorMessage(response, `HTTP ${response.status}`));
+        return response.json() as Promise<{ provider: string; models: ChatGPTModel[] }>;
+      })
+      .then((result) => {
+        if (!controller.signal.aborted && result.provider === provider) setProviderCatalog(result);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setProviderCatalog({ provider, models: [] });
+      });
+    return () => controller.abort();
+  }, [provider, providerRefresh]);
+  const availableModels = provider === "chatgpt" ? chatgpt.account?.models ?? []
+    : providerCatalog?.provider === provider ? providerCatalog.models : [];
   const { chatModelOptions, selectedChatModel, setSelectedChatModel } = useChatModelSelection(
     currentConfig,
     activeGraph?.graph_id ?? null,
-    chatgpt.account?.models ?? [],
+    availableModels,
+    provider,
   );
   const {
     activeSessionId,
@@ -555,6 +631,28 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
     };
   }, [activeGraph?.graph_id, data?.snapshot.id]);
 
+  useEffect(() => {
+    let cancelled = false;
+    setLearningPlan(null);
+    if (activeGraph) {
+      const graphId = activeGraph.graph_id;
+      const graphVersion = activeGraph.version;
+      void (async () => {
+        try {
+          const response = await apiFetch(API_BASE + "/api/v1/graphs/" + graphId + "/learning-plan");
+          if (!response.ok) throw new Error("learning plan failed with " + response.status);
+          const payload = (await response.json()) as LearningPlan;
+          if (!cancelled && payload.graph_id === graphId && payload.graph_version === graphVersion) {
+            setLearningPlan(payload);
+          }
+        } catch {
+          if (!cancelled) setLearningPlan(null);
+        }
+      })();
+    }
+    return () => { cancelled = true; };
+  }, [activeGraph?.graph_id, activeGraph?.version, data?.snapshot.id]);
+
   // Auto-scroll only for new messages or active assistant loading.
   const lastMessagesLengthRef = useRef(0);
   useEffect(() => {
@@ -644,6 +742,30 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
     } finally {
       setHistoryLoading(false);
     }
+  }
+
+  async function saveLearnerProfile(profile: LearnerProfile): Promise<void> {
+    const response = await apiFetch(`${API_BASE}/api/v1/learner/profile`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(profile),
+    });
+    if (!response.ok) throw new Error(await readErrorMessage(response, "Não foi possível salvar o perfil."));
+    const payload = (await response.json()) as WorkspaceEnvelope;
+    setData(payload);
+    setLearnerProfile(payload.workspace.learner_profile ?? profile);
+    setOnboardingOpen(false);
+    setRoadmapStudioOpen(true);
+  }
+
+  async function openConfirmedRoadmap(payload: WorkspaceEnvelope): Promise<void> {
+    const graphId = payload.workspace.active_graph_id ?? payload.workspace.graphs[0]?.graph_id ?? null;
+    setData(payload);
+    clearChatStateForGraph(graphId);
+    setActiveGraphId(graphId);
+    setSelectedTopicId(null);
+    setSelectedTopicAnchor(null);
+    await Promise.all([loadSnapshots(), loadSessionInfo()]);
+    setRoadmapStudioOpen(false);
   }
 
   async function createGraph(): Promise<void> {
@@ -960,11 +1082,12 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
     setQuizError(null);
     setQuizSuccess(null);
     setQuizReviews(null);
+    setQuizReport(null);
     try {
       const response = await apiFetch(`${API_BASE}/api/v1/graphs/${activeGraph.graph_id}/topics/${selectedTopic.id}/quiz/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: data?.workspace.config.default_model ?? null }),
+        body: JSON.stringify({ model: selectedChatModel ?? null }),
       });
       if (!response.ok) {
         throw new Error(await readErrorMessage(response, copy.errors.startQuiz));
@@ -981,12 +1104,41 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
     }
   }
 
+  async function generateLesson(): Promise<void> {
+    if (!activeGraph || !selectedTopic) return;
+    const requestId = ++lessonRequestRef.current;
+    setLessonLoading(true);
+    setLessonError(null);
+    setLessonSuccess(null);
+    try {
+      const response = await apiFetch(`${API_BASE}/api/v1/graphs/${activeGraph.graph_id}/topics/${selectedTopic.id}/lessons/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: provider === "ollama" || provider === "ruflo_native" ? selectedChatModel ?? null : null }),
+      });
+      if (!response.ok) throw new Error(await readErrorMessage(response, copy.errors.generateLesson));
+      const payload = (await response.json()) as { artifact: Artifact; workspace: WorkspaceEnvelope };
+      if (requestId !== lessonRequestRef.current) return;
+      setData((current) => !current || payload.workspace.snapshot.id >= current.snapshot.id ? payload.workspace : current);
+      void loadSnapshots();
+      setLessonSuccess(copy.topic.lessonSaved);
+    } catch (lessonFailure) {
+      if (requestId === lessonRequestRef.current) {
+        setLessonError(lessonFailure instanceof Error ? lessonFailure.message : copy.errors.generateLesson);
+      }
+    } finally {
+      if (requestId === lessonRequestRef.current) setLessonLoading(false);
+    }
+  }
+
   async function markTopicFinished(): Promise<void> {
     if (!activeGraph || !selectedTopic) return;
+    const requestId = ++quizRequestRef.current;
     setQuizLoading(true);
     setQuizError(null);
     setQuizSuccess(null);
     setQuizReviews(null);
+    setQuizReport(null);
     try {
       const response = await apiFetch(`${API_BASE}/api/v1/graphs/${activeGraph.graph_id}/topics/${selectedTopic.id}/mark-finished`, {
         method: "POST",
@@ -995,15 +1147,18 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
         throw new Error(await readErrorMessage(response, copy.errors.submitQuiz));
       }
       const payload = (await response.json()) as QuizSubmitResponse;
-      setData(payload.workspace);
+      setData((current) => !current || payload.workspace.snapshot.id >= current.snapshot.id ? payload.workspace : current);
       void loadSnapshots();
+      if (requestId !== quizRequestRef.current) return;
       setQuizSession(null);
       setQuizAnswers({});
       setQuizSuccess(copy.closure.markAsFinished);
     } catch (markError) {
-      setQuizError(markError instanceof Error ? markError.message : copy.errors.submitQuiz);
+      if (requestId === quizRequestRef.current) {
+        setQuizError(markError instanceof Error ? markError.message : copy.errors.submitQuiz);
+      }
     } finally {
-      setQuizLoading(false);
+      if (requestId === quizRequestRef.current) setQuizLoading(false);
     }
   }
 
@@ -1037,7 +1192,7 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
     await loadSnapshots();
   }
 
-  async function submitQuiz(): Promise<void> {
+  async function submitQuiz(answersOverride?: Record<string, number>): Promise<void> {
     if (!quizSession) return;
     const requestId = ++quizRequestRef.current;
     setQuizLoading(true);
@@ -1049,21 +1204,28 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           session_id: quizSession.session_id,
-          answers: quizSession.questions.map((question) => ({
-            question_id: question.id,
-            choice_index: quizAnswers[question.id] ?? -1,
-          })),
+          answers: quizSession.questions
+            .filter((question) => Number.isInteger((answersOverride ?? quizAnswers)[question.id])
+              && (answersOverride ?? quizAnswers)[question.id] >= 0
+              && (answersOverride ?? quizAnswers)[question.id] < question.choices.length)
+            .map((question) => ({
+              question_id: question.id,
+              choice_index: (answersOverride ?? quizAnswers)[question.id],
+            })),
         }),
       });
       if (!response.ok) {
         throw new Error(await readErrorMessage(response, copy.errors.submitQuiz));
       }
       const payload = (await response.json()) as QuizSubmitResponse;
+      // A completed submission is a durable mutation even if navigation or
+      // closing the dialog invalidated its transient UI response.
       setData((current) => !current || payload.workspace.snapshot.id >= current.snapshot.id ? payload.workspace : current);
-      if (requestId !== quizRequestRef.current) return;
       void loadSnapshots();
+      if (requestId !== quizRequestRef.current) return;
       setQuizAnswers({});
       setQuizReviews(payload.reviews);
+      setQuizReport(payload.report ?? null);
       if (payload.attempt.passed) {
         setQuizSuccess(copy.quiz.correct);
       }
@@ -1076,6 +1238,10 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
   }
 
   async function rollbackSnapshot(snapshotId: number): Promise<void> {
+    quizRequestRef.current += 1;
+    setQuizLoading(false);
+    setQuizError(null);
+    setQuizSuccess(null);
     setHistoryLoading(true);
     setHistoryError(null);
     try {
@@ -1091,7 +1257,9 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
       setSelectedTopicId(null);
       setSelectedTopicAnchor(null);
       setQuizSession(null);
+      setQuizAnswers({});
       setQuizReviews(null);
+      setQuizReport(null);
       await loadSnapshots();
     } catch (rollbackError) {
       setHistoryError(rollbackError instanceof Error ? rollbackError.message : copy.errors.rollbackSnapshot);
@@ -1222,7 +1390,7 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
       <button className="uiButton" type="button" onClick={() => { bootstrapStartedRef.current = false; setError(null); setBootstrapRevision((value) => value + 1); }}>Try again</button>
     </div></main>;
     return (
-      <div className="clewLaunchInline" role="status" aria-label="Loading Clew">
+      <div className="clewLaunchInline" role="status" aria-label="Loading Jew">
         <ClewLoader size={56} />
       </div>
     );
@@ -1255,6 +1423,8 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
           setDeleteConfirm,
           setCreateGraphOpen,
           setCreateGraphError,
+          openRoadmapStudio: () => { setOnboardingOpen(false); setRoadmapStudioOpen(true); },
+          openLearnerProfile: () => { setRoadmapStudioOpen(false); setOnboardingOpen(true); },
           mobileMenuOpen,
           setMobileMenuOpen,
         }}
@@ -1314,6 +1484,10 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
         topicDetails={{
           addTopicResource,
           addTopicArtifact,
+          generateLesson,
+          lessonLoading,
+          lessonError,
+          lessonSuccess,
           selectedTopic,
           selectedTopicAnchor,
           popoverPosition,
@@ -1323,18 +1497,30 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
           selectedResourceLinks,
           selectedArtifacts,
           selectedClosureStatus,
+          learningPlan: learningPlan?.graph_id === activeGraph?.graph_id && learningPlan?.graph_version === activeGraph?.version ? learningPlan : null,
           topicTitlesById,
           quizError,
           quizSuccess,
           closureTestsEnabled,
           quizLoading,
           startQuiz,
+          openQuizReportHistory,
           markTopicFinished,
         }}
         assistant={{
           agentControls: {
             answer: answerInteraction, stop: stopChat, reconnect: reconnectChat,
-            authenticated: !!chatgpt.account?.authenticated && !!chatgpt.account?.sharing, connect: () => setSettingsOpen(true),
+            authenticated: provider === "ruflo_native" ? true : provider === "chatgpt"
+              ? !!chatgpt.account?.authenticated && !!chatgpt.account?.sharing
+              : availableModels.length > 0,
+            localAIWarning: provider === "ruflo_native"
+              ? availableModels.length === 0
+                ? "IA local indisponível. Inicie o Ollama e instale um modelo com: ollama pull qwen3.5:4b (ou outro modelo compatível). Depois atualize os modelos."
+                : selectedChatModel && !availableModels.some((item) => item.model === selectedChatModel)
+                  ? `O modelo local ${selectedChatModel} não está instalado. Selecione um modelo disponível nas configurações.`
+                  : null
+              : null,
+            connect: () => setSettingsOpen(true),
             openQuiz: (session) => {
               quizRequestRef.current += 1;
               setQuizLoading(false);
@@ -1375,6 +1561,34 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
           chatComposerRef,
         }}
       />
+
+      {(onboardingOpen || roadmapStudioOpen) && (
+        <div className="jewLearningOverlay" role="presentation">
+          <div className="jewLearningPanel" role="dialog" aria-modal="true" aria-label={onboardingOpen ? "Seu perfil de aprendizagem" : "Criar roadmap"}>
+            <button className="jewLearningClose" type="button" aria-label="Voltar ao JEW"
+              onClick={() => { setOnboardingOpen(false); setRoadmapStudioOpen(false); }}>✕</button>
+            {onboardingOpen ? (
+              <LearnerOnboarding key={`${learnerProfile.profession}:${learnerProfile.onboarding_complete}`} profile={learnerProfile}
+                onSave={saveLearnerProfile} onSkip={() => { setOnboardingOpen(false); setRoadmapStudioOpen(true); }} />
+            ) : (
+              <RoadmapStudio profile={learnerProfile} onClose={() => setRoadmapStudioOpen(false)}
+                onEditProfile={() => { setRoadmapStudioOpen(false); setOnboardingOpen(true); }}
+                onCreated={openConfirmedRoadmap} />
+            )}
+          </div>
+        </div>
+      )}
+
+      {reportHistoryTarget && reportHistoryTarget.graphId === activeGraph?.graph_id &&
+        reportHistoryTarget.topicId === selectedTopicId ? (
+        <StudyReportHistory
+          key={`${reportHistoryTarget.graphId}:${reportHistoryTarget.topicId}`}
+          graphId={reportHistoryTarget.graphId}
+          topicId={reportHistoryTarget.topicId}
+          topicTitle={reportHistoryTarget.topicTitle}
+          onClose={() => setReportHistoryTarget(null)}
+        />
+      ) : null}
 
       <SettingsModal
         isSettingsOpen={isSettingsOpen}
@@ -1492,6 +1706,7 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
         closeQuizModal={closeQuizModal}
         quizError={quizError}
         quizReviews={quizReviews}
+        quizReport={quizReport}
         quizAnswers={quizAnswers}
         setQuizAnswers={setQuizAnswers}
         quizLoading={quizLoading}

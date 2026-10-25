@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "clew-backend"
 version = "1.0.0"
-description = "Backend for the Clew graph-first learning workspace"
+description = "Backend for the Jew graph-first learning workspace"
 requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.115.0,<1.0.0",
@@ -15,8 +15,12 @@ dependencies = [
   "httpx>=0.28.0,<1.0.0",
   "mcp>=1.2.0,<2.0.0",
   "keyring>=25.0.0,<26.0.0",
-  "PyJWT[crypto]>=2.9.0,<3.0.0"
+  "PyJWT[crypto]>=2.9.0,<3.0.0",
+  "reportlab>=4.4,<5.0",
 ]
+
+[project.optional-dependencies]
+test = ["pypdf>=6.0,<7.0"]
 
 [project.scripts]
 clew-study-assist = "app.mcp_server.__main__:main"

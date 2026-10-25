@@ -42,7 +42,8 @@ export function AssistantComposer({
   return (
     <div className="assistantComposerWrap">
       {chatError ? <div className="inlineNotice inlineNoticeError" role="alert">{chatError}<button className="composerInlineAction" type="button" onClick={agentControls.reconnect}>Reconnect</button></div> : null}
-      {!agentControls.authenticated ? <div className="chatgptChatConnect"><span>Sign in with ChatGPT to start learning.</span><button className="composerInlineAction" type="button" onClick={agentControls.connect}>Sign in</button></div> : null}
+      {!agentControls.authenticated ? <div className="chatgptChatConnect"><span>Configure an AI provider to use this mode.</span><button className="composerInlineAction" type="button" onClick={agentControls.connect}>Settings</button></div> : null}
+      {agentControls.localAIWarning ? <div className="chatgptChatConnect" role="status"><span>{agentControls.localAIWarning} Comandos /ruflo e /help continuam disponíveis.</span><button className="composerInlineAction" type="button" onClick={agentControls.connect}>Configurações</button></div> : null}
       {chatSessionsError ? <div className="inlineNotice inlineNoticeError">{chatSessionsError}</div> : null}
       {applyError ? <div className="inlineNotice inlineNoticeError">{applyError}</div> : null}
       <div className="assistantTemplates">

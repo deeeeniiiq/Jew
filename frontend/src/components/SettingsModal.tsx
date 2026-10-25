@@ -1,7 +1,7 @@
 import React from "react";
 
 import { X } from "@phosphor-icons/react";
-import { ChatGPTAccountPanel } from "./ChatGPTAccountPanel";
+import { AgentProviderPanel } from "./AgentProviderPanel";
 import { SectionHead } from "./SettingsSection";
 import { SwitchRow } from "./ui/SwitchRow";
 import type { ChatGPTAccountController } from "../hooks/useChatGPTAccount";
@@ -117,7 +117,9 @@ export function SettingsModal(props: SettingsModalProps): React.JSX.Element | nu
         <div className="stScroll">
           <div className="stGrid">
             <div className="stColumn">
-              <ChatGPTAccountPanel chatgpt={chatgpt} drafts={drafts} setDrafts={setDrafts} />
+              <AgentProviderPanel chatgpt={chatgpt} drafts={drafts} setDrafts={setDrafts}
+                savedProvider={currentConfig?.agent_backend ?? null}
+                savedRufloEnabled={currentConfig?.ruflo_enabled ?? false} />
 
               <section className="stSection">
                 <SectionHead eyebrow="Preferences" title="Assistant and workspace" />
@@ -150,7 +152,7 @@ export function SettingsModal(props: SettingsModalProps): React.JSX.Element | nu
 
               <section className="stSection">
                 <SectionHead eyebrow={copy.settingsPanel.aiBehavior} title={copy.settingsPanel.memory} />
-                <p className="stLead">Clew keeps each conversation. These settings control the fresh graph context and the initial import of an existing chat.</p>
+                <p className="stLead">Jew keeps each conversation. These settings control the fresh graph context and the initial import of an existing chat.</p>
                 <div className="uiSegmented">
                   {MEMORY_MODE_OPTIONS.map((option) => (
                     <button

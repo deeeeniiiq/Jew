@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    app_name: str = "Clew"
+    app_name: str = "Jew"
     api_host: str = "127.0.0.1"
     api_port: int = 8787
     root_dir: Path = Path(__file__).resolve().parents[3]

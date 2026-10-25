@@ -1,5 +1,7 @@
 # Local development
 
+> **Historical Clew guide.** This page documents the original ChatGPT-only Clew workflow and contains obsolete prerequisites and download links for Jew. For Jew 1.0.0, follow [Current Jew guide](JEW_CURRENT.md). Local Ruflo + Ollama does not require ChatGPT Plus/Pro or sign-in.
+
 For installation without development tools, use the [desktop downloads](https://github.com/miuuyy/Clew/releases/latest). See [Desktop](DESKTOP.md) for native Windows setup and packaging.
 
 ## Requirements

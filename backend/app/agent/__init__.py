@@ -1,1 +1,1 @@
-"""Clew agent runtime on Sign in with ChatGPT, and its application-owned tools."""
+"""Jew agent runtime with optional ChatGPT sign-in and application-owned tools."""

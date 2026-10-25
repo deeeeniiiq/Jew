@@ -6,7 +6,7 @@ from uuid import uuid4
 from pathlib import Path
 
 from app.models.api import ObsidianExportOptions
-from app.models.domain import Artifact, CreateGraphRequest, GraphProposal, PatchOperation, ProposalTopic, ProposalZone, QuizAttempt, ResourceLink, StudyGraph, Topic, Zone
+from app.models.domain import Artifact, CreateGraphRequest, Edge, GraphProposal, PatchOperation, ProposalTopic, ProposalZone, QuizAttempt, ResourceLink, StudyGraph, Topic, Zone
 from app.services.obsidian_export import build_obsidian_export_package
 from app.services.assessment_service import AssessmentService
 from app.services.repository import GraphRepository
@@ -69,8 +69,36 @@ class RepositoryGraphTests(unittest.TestCase):
         self.assertTrue(attempt.passed)
         self.assertTrue(prerequisite_attempt.passed)
         self.assertEqual(attempt.score, 1.0)
+        self.assertEqual(attempt.source, "manual")
+        self.assertEqual(prerequisite_attempt.source, "manual")
         self.assertTrue(attempt.closure_awarded)
         self.assertTrue(prerequisite_attempt.closure_awarded)
+
+    def test_manual_completion_keeps_existing_graded_quiz_evidence(self) -> None:
+        current = self.repository.current()
+        graph = next(g for g in current.workspace.graphs if g.graph_id == "mathematics-demo")
+        graph.quiz_attempts.append(QuizAttempt(
+            id="graded-functions", topic_id="functions", passed=False,
+            score=0.5, question_count=6, fail_count=2,
+        ))
+        with self.repository._connect() as conn:
+            self.repository._insert_snapshot(
+                conn, current.workspace, source="test.seed", reason="existing graded quiz",
+                parent_snapshot_id=current.snapshot.id,
+            )
+
+        finished = self.repository.mark_topic_finished("mathematics-demo", "functions")
+        attempts = next(g for g in finished.workspace.graphs if g.graph_id == "mathematics-demo").quiz_attempts
+        self.assertEqual([(a.id, a.score, a.fail_count) for a in attempts if a.source == "quiz"],
+                         [("graded-functions", 0.5, 2)])
+        self.assertEqual(len([a for a in attempts if a.topic_id == "functions" and a.source == "manual"]), 1)
+
+        again = self.repository.mark_topic_finished("mathematics-demo", "functions")
+        attempts = next(g for g in again.workspace.graphs if g.graph_id == "mathematics-demo").quiz_attempts
+        self.assertEqual(len([a for a in attempts if a.topic_id == "functions" and a.source == "manual"]), 2)
+        self.assertEqual(len({a.id for a in attempts}), len(attempts))
+        self.assertEqual([a.source for a in attempts if a.topic_id == "functions"], ["quiz", "manual", "manual"])
+        self.assertEqual(len([a for a in attempts if a.id == "graded-functions"]), 1)
 
     def test_update_graph_layout_marks_manual_layout_version(self) -> None:
         workspace = self.repository.update_graph_layout(
@@ -180,6 +208,78 @@ class RepositoryGraphTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     self.repository.import_graph_package(package)
                 self.assertEqual(self.repository.current().snapshot.id, before)
+
+    def test_import_rejects_cyclic_prerequisites_without_snapshot(self):
+        for defect in ("self-dependency", "directed-cycle"):
+            with self.subTest(defect=defect):
+                package = self.repository.export_graph_package("mathematics-demo")
+                if defect == "self-dependency":
+                    package.graph.edges.append(Edge(
+                        id="invalid-self-edge", source_topic_id="arithmetics",
+                        target_topic_id="arithmetics", relation="requires",
+                    ))
+                else:
+                    package.graph.edges.append(Edge(
+                        id="invalid-reverse-edge", source_topic_id="algebra-basics",
+                        target_topic_id="arithmetics", relation="requires",
+                    ))
+                before = self.repository.current().snapshot.id
+                with self.assertRaisesRegex(ValueError, "directed cycles"):
+                    self.repository.import_graph_package(package)
+                self.assertEqual(self.repository.current().snapshot.id, before)
+
+    def test_import_rejects_attempts_for_unknown_topics_without_snapshot(self):
+        package = self.repository.export_graph_package("mathematics-demo")
+        package.graph.quiz_attempts.append(QuizAttempt(
+            id="orphan-attempt", topic_id="missing-topic", passed=True,
+            score=1.0, question_count=5, closure_awarded=True,
+        ))
+        before = self.repository.current().snapshot.id
+        with self.assertRaisesRegex(ValueError, "quiz attempts reference unknown topics"):
+            self.repository.import_graph_package(package)
+        self.assertEqual(self.repository.current().snapshot.id, before)
+
+        # Progress can be deliberately discarded when importing a legacy package.
+        imported = self.repository.import_graph_package(package, include_progress=False)
+        new_graph = next(g for g in imported.workspace.graphs if g.graph_id == imported.workspace.active_graph_id)
+        self.assertEqual(new_graph.quiz_attempts, [])
+
+    def test_import_rejects_unsupported_package_formats_without_snapshot(self):
+        for attribute, invalid_value in (("kind", "mapmind_obsidian_export"), ("version", 2)):
+            with self.subTest(attribute=attribute):
+                package = self.repository.export_graph_package("mathematics-demo")
+                setattr(package, attribute, invalid_value)
+                before = self.repository.current().snapshot.id
+                with self.assertRaisesRegex(ValueError, "Unsupported graph package"):
+                    self.repository.import_graph_package(package)
+                self.assertEqual(self.repository.current().snapshot.id, before)
+
+    def test_import_rejects_duplicate_or_blank_attempt_ids_without_snapshot(self):
+        for defect in ("duplicate", "blank"):
+            with self.subTest(defect=defect):
+                package = self.repository.export_graph_package("mathematics-demo")
+                attempt = QuizAttempt(
+                    id="imported-quiz", topic_id="functions", passed=False,
+                    score=0.5, question_count=6,
+                )
+                package.graph.quiz_attempts = [attempt]
+                if defect == "duplicate":
+                    package.graph.quiz_attempts.append(attempt.model_copy(deep=True))
+                else:
+                    package.graph.quiz_attempts[0].id = "  "
+
+                before = self.repository.current().snapshot.id
+                with self.assertRaisesRegex(ValueError, "quiz attempt ids"):
+                    self.repository.import_graph_package(package)
+                self.assertEqual(self.repository.current().snapshot.id, before)
+
+                # Invalid legacy progress can still be discarded explicitly.
+                imported = self.repository.import_graph_package(package, include_progress=False)
+                imported_graph = next(
+                    graph for graph in imported.workspace.graphs
+                    if graph.graph_id == imported.workspace.active_graph_id
+                )
+                self.assertEqual(imported_graph.quiz_attempts, [])
 
     def test_obsidian_export_rejects_colliding_filenames_and_readme(self):
         for titles in (("A/B", "A\\B"), ("Topic", "topic"), ("README",)):

@@ -1,4 +1,4 @@
-"""Pure read-only tool implementations for the Clew MCP server.
+"""Pure read-only tool implementations for the Jew MCP server.
 
 These functions take a WorkspaceDocument (loaded by server.py from the
 repository) and return plain dicts. They do not touch the LLM layer and do
@@ -153,7 +153,7 @@ def _single_graph_context(
         )
 
     sorted_attempts = sorted(
-        graph.quiz_attempts,
+        (attempt for attempt in graph.quiz_attempts if attempt.source == "quiz"),
         key=lambda attempt: attempt.created_at,
         reverse=True,
     )[:recent_quiz_limit]

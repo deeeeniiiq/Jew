@@ -5,6 +5,10 @@ def apply_workspace_config_update(workspace: WorkspaceDocument, request: UpdateW
     values = request.model_dump(exclude_unset=True)
     if not values:
         raise ValueError("no config fields provided")
+    prior_provider = workspace.config.agent_backend
+    if "agent_backend" in values and values["agent_backend"] != prior_provider and "default_model" not in values:
+        workspace.config.default_model = None
+        workspace.config.reasoning_effort = None
     for key, value in values.items():
         if value is None and key not in {"default_model", "reasoning_effort"}:
             raise ValueError(f"{key} cannot be null")

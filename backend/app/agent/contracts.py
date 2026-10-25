@@ -129,6 +129,24 @@ class ClosureQuizDraft(QuizQuestionSetDraft):
     topic_id: str
 
 
+class LessonDraft(ToolInput):
+    """Structured pedagogical content before saving it as a topic artifact."""
+
+    model_config = {"extra": "forbid"}
+    title: str = Field(min_length=3, max_length=180)
+    objectives: list[str] = Field(min_length=2, max_length=6)
+    explanation: str = Field(min_length=80, max_length=14000)
+    examples: list[str] = Field(min_length=1, max_length=4)
+    practice: list[str] = Field(min_length=2, max_length=6)
+    summary: str = Field(min_length=30, max_length=3000)
+
+    @model_validator(mode="after")
+    def _validate_content(self) -> "LessonDraft":
+        if any(not item.strip() for item in (*self.objectives, *self.examples, *self.practice)):
+            raise ValueError("lesson lists must contain nonempty entries")
+        return self
+
+
 TOOL_MODELS = {
     "propose_ingest": ProposalDraft,
     "propose_expand": ProposalDraft,
@@ -142,13 +160,13 @@ CLOSURE_QUIZ_TOOLS = frozenset({"read_graph", "read_topic", "create_closure_quiz
 
 
 def tool_specs(only: frozenset[str] | None = None) -> list[dict[str, Any]]:
-    """Clew tools as Responses API function tools."""
+    """Jew tools as Responses API function tools."""
     descriptions = {
-        "propose_ingest": "Submit graph operations that preserve the supplied source material. Clew validates and presents them for user review; this does not apply changes. Omitted descriptive metadata is preserved on existing topics. Read the current graph version first.",
-        "propose_expand": "Submit graph operations that extend the learning path toward the user's goal. Clew validates and presents them for user review; this does not apply changes. Omitted descriptive metadata is preserved on existing topics. Read the current graph version first.",
+        "propose_ingest": "Submit graph operations that preserve the supplied source material. Jew validates and presents them for user review; this does not apply changes. Omitted descriptive metadata is preserved on existing topics. Read the current graph version first.",
+        "propose_expand": "Submit graph operations that extend the learning path toward the user's goal. Jew validates and presents them for user review; this does not apply changes. Omitted descriptive metadata is preserved on existing topics. Read the current graph version first.",
         "ask_question": "Ask the user a focused question, optionally with choices. Waits for their answer; free-text replies are always allowed.",
         "present_quiz": "Present one multiple-choice learning checkpoint with exactly four distinct choices. Waits for the user's answer and returns the graded result. Does not award topic completion.",
-        "create_closure_quiz": "Register a complete closure quiz for a topic. Supply the requested number of questions with four distinct choices each. Clew checks prerequisites and grades the learner's answers itself.",
+        "create_closure_quiz": "Register a complete closure quiz for a topic. Supply the requested number of questions with four distinct choices each. Jew checks prerequisites and grades the learner's answers itself.",
     }
     functions = [
         {"type": "function", "name": name, "description": descriptions[name], "parameters": model.model_json_schema(), "strict": False}

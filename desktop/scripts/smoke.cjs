@@ -8,8 +8,8 @@ const root = path.join(__dirname, '..', '..');
 const folder = path.join(root, 'desktop/artifacts');
 const macFolder = process.arch === 'arm64' ? 'mac-arm64' : 'mac';
 const executable = process.env.CLEW_SMOKE_EXECUTABLE || (process.platform === 'darwin'
-  ? path.join(folder, macFolder, 'Clew.app/Contents/MacOS/Clew')
-  : path.join(folder, process.platform === 'win32' ? 'win-unpacked/Clew.exe' : process.arch === 'arm64' ? 'linux-arm64-unpacked/clew' : 'linux-unpacked/clew'));
+  ? path.join(folder, macFolder, 'Jew.app/Contents/MacOS/Jew')
+  : path.join(folder, process.platform === 'win32' ? 'win-unpacked/Jew.exe' : process.arch === 'arm64' ? 'linux-arm64-unpacked/jew' : 'linux-unpacked/jew'));
 if (!fs.existsSync(executable)) throw new Error(`Packaged native executable is missing: ${executable}`);
 fs.mkdirSync(folder, { recursive: true });
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'clew-package-smoke-'));
@@ -33,7 +33,7 @@ try {
       throw new Error(`Packaged smoke failed: ${JSON.stringify(receipt)}. Diagnostics: ${dataDir}`);
     }
   }
-  console.log('Packaged Clew: onboarding, stable storage across restart, CORS, session protection, sandbox and backend shutdown passed.');
+  console.log('Packaged Jew: workspace, stable storage across restart, CORS, session protection, sandbox and backend shutdown passed.');
   fs.rmSync(dataDir, { recursive: true, force: true });
 } catch (error) {
   const diagnostic = path.join(dataDir, 'logs', 'desktop.log');

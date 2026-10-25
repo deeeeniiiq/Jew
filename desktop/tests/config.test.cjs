@@ -26,7 +26,7 @@ test('packaging preserves signing limits, data and sandbox requirements', () => 
   assert.equal(builder.nsis.allowElevation, false);
   assert.equal(builder.nsis.deleteAppDataOnUninstall, false);
   assert.deepEqual(builder.appImage.executableArgs, []);
-  assert.equal(builder.linux.artifactName, `Clew-\${version}-linux-${process.arch}.\${ext}`);
+  assert.equal(builder.linux.artifactName, `Jew-\${version}-linux-${process.arch}.\${ext}`);
   assert.ok(builder.beforePack);
   assert.ok(builder.extraResources.some(item => item.to.startsWith('export/')));
 });

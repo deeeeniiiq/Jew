@@ -6,7 +6,10 @@ const path = require('node:path');
 const { validateExport, writeExport, nativeCommit } = require('../export.cjs');
 
 const root = path.resolve(__dirname, '../..');
-const commit = nativeCommit({ root, packaged: false, python: process.env.CLEW_PYTHON || (process.platform === 'win32' ? 'python' : path.join(root, '.venv/bin/python')) });
+const officialPython = path.join(root, '.venv-official', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
+const commit = nativeCommit({ root, packaged: false,
+  python: process.env.CLEW_PYTHON || (require('node:fs').existsSync(officialPython) ? officialPython
+    : process.platform === 'win32' ? 'python' : path.join(root, '.venv/bin/python')) });
 const pkg = (paths = ['README.md', 'Zone/Topic.md']) => ({ kind: 'mapmind_obsidian_export', version: 1, folder_name: 'My graph', file_count: paths.length, files: paths.map(file => ({ path: file, body: `# ${file}\n` })) });
 
 test('Obsidian paths reject traversal, platform-special names and collisions', () => {

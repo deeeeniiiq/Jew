@@ -2,7 +2,7 @@ import React from "react";
 import { X } from "@phosphor-icons/react";
 import { useModalAccessibility } from "../../lib/useModalAccessibility";
 
-export type ModalSize = "sm" | "md" | "lg";
+export type ModalSize = "sm" | "md" | "lg" | "study";
 
 /** One dialog surface: header, scrolling body, optional footer of actions. */
 export function Modal({

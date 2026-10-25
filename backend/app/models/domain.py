@@ -3,13 +3,13 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, StrictInt, model_validator
 
 
 
 TopicState = Literal["not_started", "learning", "shaky", "solid", "mastered", "needs_review"]
 EdgeRelation = Literal["requires", "supports", "bridges", "extends", "reviews"]
-GraphLanguage = Literal["en", "uk", "ru"]
+GraphLanguage = Literal["en", "uk", "ru", "pt"]
 ReasoningEffort = Literal["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"]
 ChatAction = Literal["answer", "propose_ingest", "propose_expand"]
 MemoryMode = Literal["balanced", "max", "custom"]
@@ -90,10 +90,19 @@ class QuizAttempt(BaseModel):
     passed: bool
     score: float
     question_count: int
+    source: Literal["quiz", "manual"] = "quiz"
     closure_awarded: bool = False
     created_at: datetime = Field(default_factory=utc_now)
     missed_questions: list[str] = Field(default_factory=list)
     fail_count: int = 0
+
+    @model_validator(mode="before")
+    @classmethod
+    def identify_legacy_manual_completions(cls, value: Any) -> Any:
+        # Old snapshots used a manual- id but did not store the source field.
+        if isinstance(value, dict) and "source" not in value and str(value.get("id", "")).startswith("manual-"):
+            return {**value, "source": "manual"}
+        return value
 
 
 class QuizQuestion(BaseModel):
@@ -102,6 +111,9 @@ class QuizQuestion(BaseModel):
     choices: list[str] = Field(default_factory=list)
     correct_choice_index: int
     explanation: str = ""
+    # Legacy sessions load as unverified; this label is never proof by itself.
+    verification_status: Literal["verified", "unverified"] = "unverified"
+    verification_version: str | None = None
 
 
 class QuizQuestionSet(BaseModel):
@@ -137,6 +149,7 @@ class QuizQuestionPublic(BaseModel):
     prompt: str
     choices: list[str] = Field(default_factory=list)
     explanation: str = ""
+    verification_status: Literal["verified", "unverified"] = "unverified"
 
 
 class TopicQuizSessionPublic(BaseModel):
@@ -159,6 +172,68 @@ class QuizQuestionReview(BaseModel):
     explanation: str = ""
 
 
+class QuizReportFinding(BaseModel):
+    question_id: str
+    outcome: Literal["correct", "incorrect", "unanswered"]
+    observation: str
+    error_category: Literal["not_answered", "undetermined"] | None = None
+    hypothesis: str | None = None
+    diagnosis_confidence: Literal["not_applicable", "insufficient"] = "not_applicable"
+    evidence_needed: str | None = None
+    next_action: str
+    verification_status: Literal["verified", "unverified"]
+
+
+class QuizPedagogicalReport(BaseModel):
+    attempt_id: str
+    title: str
+    attempted_at: datetime
+    question_count: int
+    answered_count: int
+    correct_count: int
+    incorrect_count: int
+    unanswered_count: int
+    ungraded_count: int = 0
+    score: float
+    generator: str
+    grading_method: str
+    duration_seconds: int | None = None
+    verified_keys_count: int
+    unverified_keys_count: int
+    strengths: list[str] = Field(default_factory=list)
+    improvement_areas: list[str] = Field(default_factory=list)
+    evidence_limits: list[str] = Field(default_factory=list)
+    question_findings: list[QuizReportFinding] = Field(default_factory=list)
+    recovery_plan: list[str] = Field(default_factory=list)
+    historical_comparison: str | None = None
+    next_steps: list[str] = Field(default_factory=list)
+
+
+class QuizReportRecord(BaseModel):
+    """Immutable submitted assessment evidence, stored as a versioned JSON record."""
+
+    format_version: Literal[1] = 1
+    graph_id: str
+    topic_id: str
+    attempt: QuizAttempt
+    report: QuizPedagogicalReport
+    reviews: list[QuizQuestionReview]
+
+    @model_validator(mode="after")
+    def validate_links(self) -> "QuizReportRecord":
+        if self.attempt.source != "quiz" or self.attempt.topic_id != self.topic_id:
+            raise ValueError("Report must belong to a graded quiz attempt and topic.")
+        if self.report.attempt_id != self.attempt.id or self.report.score != self.attempt.score:
+            raise ValueError("Report and attempt identifiers or scores do not match.")
+        review_ids = [review.question_id for review in self.reviews]
+        finding_ids = [finding.question_id for finding in self.report.question_findings]
+        if len(set(review_ids)) != len(review_ids) or review_ids != finding_ids:
+            raise ValueError("Report findings and reviews must match by question ID and order.")
+        if len(review_ids) != self.attempt.question_count or self.report.question_count != len(review_ids):
+            raise ValueError("Report question count does not match the attempt.")
+        return self
+
+
 class QuizStartRequest(BaseModel):
     question_count: int | None = Field(default=None, ge=6, le=12)
     model: str | None = Field(default=None, min_length=1)
@@ -166,6 +241,43 @@ class QuizStartRequest(BaseModel):
 
 class QuizStartResponse(BaseModel):
     session: TopicQuizSessionPublic
+
+
+class StudyPoint(BaseModel):
+    x: float = Field(ge=0, le=1, allow_inf_nan=False)
+    y: float = Field(ge=0, le=1, allow_inf_nan=False)
+
+
+class StudyStroke(BaseModel):
+    id: str = Field(min_length=1, max_length=80)
+    tool: Literal["pen", "highlighter"] = "pen"
+    color: str = Field(pattern=r"^#[0-9a-fA-F]{6}$")
+    width: float = Field(ge=1, le=24, allow_inf_nan=False)
+    points: list[StudyPoint] = Field(min_length=1, max_length=1200)
+
+
+class QuizStudyDraft(BaseModel):
+    format_version: Literal[1] = 1
+    revision: int = Field(default=0, ge=0)
+    answers: dict[str, StrictInt] = Field(default_factory=dict)
+    active_question_id: str | None = None
+    flagged_question_ids: list[str] = Field(default_factory=list, max_length=20)
+    notes: dict[str, str] = Field(default_factory=dict)
+    strokes: dict[str, list[StudyStroke]] = Field(default_factory=dict)
+    updated_at: datetime | None = None
+
+    @model_validator(mode="after")
+    def validate_study_size(self) -> "QuizStudyDraft":
+        if len(self.notes) > 20 or len(self.strokes) > 20 or len(self.answers) > 20:
+            raise ValueError("Study draft contains too many question entries.")
+        if sum(len(note) for note in self.notes.values()) > 100000:
+            raise ValueError("Study draft notes exceed 100,000 characters.")
+        strokes = [stroke for page in self.strokes.values() for stroke in page]
+        if len(strokes) > 600 or sum(len(stroke.points) for stroke in strokes) > 30000:
+            raise ValueError("Study draft exceeds drawing limits.")
+        if len({stroke.id for stroke in strokes}) != len(strokes):
+            raise ValueError("Study draft contains duplicate stroke IDs.")
+        return self
 
 
 class QuizSubmitRequest(BaseModel):
@@ -178,6 +290,7 @@ class QuizSubmitResponse(BaseModel):
     closure_status: TopicClosureStatus
     awarded_state: TopicState | None = None
     reviews: list[QuizQuestionReview] = Field(default_factory=list)
+    report: QuizPedagogicalReport | None = None
     workspace: "WorkspaceEnvelope"
 
 
@@ -244,6 +357,10 @@ class WorkspaceConfig(BaseModel):
             data["agent_backend"] = "chatgpt"
             data["default_model"] = None
             data["reasoning_effort"] = None
+        elif "agent_backend" not in data and data.get("ai_provider") in {"gemini", "openai"}:
+            # Old workspaces had ChatGPT as the plan provider. Preserve that
+            # choice when loading snapshots predating explicit backend config.
+            data["agent_backend"] = "chatgpt"
         if data.get("ai_provider") in {"gemini", "openai"}:
             data["default_model"] = None
         if data.get("memory_mode") == "compact":
@@ -252,7 +369,8 @@ class WorkspaceConfig(BaseModel):
                 data.setdefault(key, value)
         return data
 
-    agent_backend: Literal["chatgpt"] = "chatgpt"
+    agent_backend: Literal["chatgpt", "ollama", "openai_api", "codex_cli", "ruflo_native"] = "ruflo_native"
+    ruflo_enabled: bool = False
     default_model: str | None = None
     reasoning_effort: ReasoningEffort | None = None
     ui_language: str = "en"
@@ -277,11 +395,25 @@ class WorkspaceConfig(BaseModel):
 
 class WorkspaceDocument(BaseModel):
     workspace_id: str = "default"
-    title: str = "Clew Workspace"
+    title: str = "Jew Workspace"
     active_graph_id: str | None = None
     config: WorkspaceConfig = Field(default_factory=WorkspaceConfig)
     graphs: list[StudyGraph] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
+    learner_profile: "LearnerProfile" = Field(default_factory=lambda: LearnerProfile())
+
+
+class LearnerProfile(BaseModel):
+    """Optional local learning identity; no external social login is implied."""
+
+    display_name: str = Field(default="", max_length=100)
+    profession: str = Field(default="", max_length=120)
+    interests: list[str] = Field(default_factory=list, max_length=12)
+    level: Literal["beginner", "intermediate", "advanced"] = "beginner"
+    goal: str = Field(default="", max_length=400)
+    github: str = Field(default="", max_length=240)
+    instagram: str = Field(default="", max_length=240)
+    onboarding_complete: bool = False
 
 
 class GraphSummary(BaseModel):
@@ -303,6 +435,8 @@ class CreateGraphRequest(BaseModel):
 
 class UpdateWorkspaceConfigRequest(BaseModel):
     model_config = {"extra": "forbid"}
+    agent_backend: Literal["chatgpt", "ollama", "openai_api", "codex_cli", "ruflo_native"] | None = None
+    ruflo_enabled: bool | None = None
     default_model: str | None = None
     reasoning_effort: ReasoningEffort | None = None
     disable_idle_animations: bool | None = None

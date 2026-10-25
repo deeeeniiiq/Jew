@@ -27,7 +27,7 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
     const destination = new URL(request.url);
     const backend = new URL(window.clewDesktop.apiBase);
     if (destination.protocol !== backend.protocol || destination.host !== backend.host || !destination.pathname.startsWith("/api/v1/")) {
-      throw new Error("Desktop API requests must target Clew's local API.");
+      throw new Error("Desktop API requests must target Jew's local API.");
     }
     request.headers.set("X-Clew-Session", window.clewDesktop.sessionToken);
   }
@@ -42,7 +42,8 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
     const isStream =
       contentType.includes("text/event-stream")
       || contentType.includes("application/x-ndjson")
-      || contentType.includes("application/ndjson");
+      || contentType.includes("application/ndjson")
+      || contentType.includes("application/pdf");
     const responseBody = !isDebugModeEnabled() ? null : isStream ? "[stream response]" : await response.clone().text().catch(() => null);
     await recordApiDebugLog({
       url: request.url,

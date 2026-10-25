@@ -1,17 +1,17 @@
 {
-  "name": "clew",
+  "name": "jew",
   "version": "1.0.0",
   "private": true,
-  "description": "A graph-first learning workspace powered by your ChatGPT plan.",
+  "description": "A graph-first learning workspace with optional ChatGPT, Ollama, and OpenAI API providers.",
   "author": { "name": "Aleksandr Vechenkov", "email": "147659719+miuuyy@users.noreply.github.com" },
-  "desktopName": "clew",
+  "desktopName": "jew",
   "license": "MIT",
   "main": "desktop/main.cjs",
   "repository": {
     "type": "git",
-    "url": "https://github.com/miuuyy/Clew.git"
+    "url": "https://github.com/deeeeniiiq/Jew.git"
   },
-  "homepage": "https://clew.my",
+  "homepage": "https://github.com/deeeeniiiq",
   "scripts": {
     "dev": "node desktop/scripts/dev.cjs",
     "build": "npm --prefix frontend run typecheck && npm --prefix frontend run build && node desktop/scripts/build-backend.cjs",

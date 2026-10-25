@@ -18,7 +18,7 @@ def main() -> None:
     port = listener.getsockname()[1]
     os.environ["KG_API_PORT"] = str(port)
     if not all(os.environ.get(key) for key in ("KG_DESKTOP_TOKEN", "KG_DB_PATH", "KG_DEBUG_LOG_DIR", "KG_FRONTEND_ORIGIN")):
-        raise RuntimeError("The Clew launcher must supply its private session, database path, writable log directory (KG_DEBUG_LOG_DIR) and KG_FRONTEND_ORIGIN.")
+        raise RuntimeError("The Jew launcher must supply its private session, database path, writable log directory (KG_DEBUG_LOG_DIR) and KG_FRONTEND_ORIGIN.")
     if os.environ["KG_FRONTEND_ORIGIN"] != "clew://app":
         raise RuntimeError("The desktop frontend origin must be clew://app.")
     if getattr(sys, "frozen", False):
@@ -52,4 +52,10 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    if sys.argv[1:] == ["--check-ssl"]:
+        import ssl
+
+        ssl.create_default_context()
+        print("Jew backend SSL self-check passed.", flush=True)
+    else:
+        main()

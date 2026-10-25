@@ -4,11 +4,21 @@ import json
 import unittest
 
 from app.agent.context import turn_context
-from app.models.domain import Edge, StudyGraph, Topic, WorkspaceConfig, Zone
+from app.models.domain import Edge, QuizAttempt, StudyGraph, Topic, WorkspaceConfig, Zone
 from app.services.repository import GraphRepository
 
 
 class AgentContextTests(unittest.TestCase):
+    def test_recent_quiz_context_excludes_manual_completions(self):
+        graph = StudyGraph(graph_id="g", subject="test", title="Test", quiz_attempts=[
+            QuizAttempt(id="graded", topic_id="a", passed=False, score=0.5, question_count=6),
+            QuizAttempt(id="manual-new", topic_id="a", passed=True, score=1, question_count=6,
+                        source="manual"),
+        ])
+        config = WorkspaceConfig(memory_include_quiz_context=True)
+        payload = json.loads(turn_context(graph, config, None, []).split("\n", 1)[1])
+        self.assertEqual([a["id"] for a in payload["recent_quiz_attempts"]], ["graded"])
+
     def test_frontier_preserves_order_and_only_requires_closed_parents(self):
         names = ("closed", "ready", "blocked", "supported", "root")
         graph = StudyGraph(graph_id="g", subject="test", title="Test",

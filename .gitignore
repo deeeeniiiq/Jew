@@ -1,5 +1,6 @@
 .DS_Store
 .venv/
+.venv-official/
 .venv-run/
 __pycache__/
 *.pyc
@@ -41,6 +42,7 @@ references/
 node_modules/
 desktop/build/
 desktop/artifacts/
+desktop/artifacts-jew-rebuild/
 logs/
 .agents/*
 !.agents/skills
@@ -59,3 +61,9 @@ backend/data/agent-workspace/
 
 # Hosted clew.my client source (private, synced from the VPS)
 /public/
+
+# Local agent/tool state
+.claude-flow/
+.codex/
+graphify-out/
+AGENTS.md.backup

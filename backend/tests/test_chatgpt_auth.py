@@ -47,7 +47,7 @@ class ChatGPTAuthTests(unittest.IsolatedAsyncioTestCase):
         auth = await self.auth()
         query = await self.sign_in(auth)
         self.assertEqual(query["client_id"], ["dynamic_agent_client"])
-        self.assertEqual(query["agent_name_hint"], ["Clew"])
+        self.assertEqual(query["agent_name_hint"], ["Jew"])
         self.assertTrue(query["ext_agent_host_id"][0].startswith("urn:uuid:"))
         self.assertIn("chatgpt.tokens.use.direct", query["scope"][0])
         self.assertEqual(query["code_challenge_method"], ["S256"])
@@ -59,6 +59,33 @@ class ChatGPTAuthTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(status["account"]["email"], "learner@example.com")
         self.assertEqual(await auth.access_token(), "access-1")
         self.assertNotIn("access-1", self.registration.read_text())
+
+    async def test_failed_credential_write_keeps_existing_connection(self):
+        previous = signed_in()
+        auth = await self.auth(previous)
+        login = await auth.start_login()
+        self.peer.nonce = login.nonce
+        original_registration = auth.registration()
+        with patch.object(auth.store, "write", side_effect=ChatGPTError("credential_storage_unavailable", "Could not save")):
+            with self.assertRaisesRegex(ChatGPTError, "Could not save"):
+                await auth.complete_login({"state": [login.state], "code": ["code"], "client_id": [CLIENT_ID]})
+        self.assertEqual(auth.store.read(), previous)
+        self.assertEqual(auth.registration(), original_registration)
+        self.assertTrue(auth.status()["authenticated"])
+
+    async def test_failed_registration_write_restores_previous_connection(self):
+        previous = signed_in()
+        auth = await self.auth(previous)
+        login = await auth.start_login()
+        self.peer.nonce = login.nonce
+        original_registration = auth.registration()
+        with patch.object(auth, "_save_registration", side_effect=OSError("read-only directory")):
+            with self.assertRaisesRegex(OSError, "read-only directory"):
+                await auth.complete_login({"state": [login.state], "code": ["code"], "client_id": [CLIENT_ID]})
+        self.assertEqual(auth.store.read(), previous)
+        self.assertEqual(auth.registration(), original_registration)
+        self.assertTrue(auth.status()["authenticated"])
+        self.assertEqual(auth.status()["error"], "Jew could not finish saving the ChatGPT sign-in. Try again from Jew.")
 
 
     async def test_callback_keeps_polling_active_until_identity_and_credentials_are_saved(self):
@@ -105,7 +132,7 @@ class ChatGPTAuthTests(unittest.IsolatedAsyncioTestCase):
             await self.sign_in(auth, nonce="other")
         self.assertFalse(auth.status()["authenticated"])
         await auth.start_login()
-        with self.assertRaisesRegex(ChatGPTError, "not the one Clew started"):
+        with self.assertRaisesRegex(ChatGPTError, "not the one Jew started"):
             await auth.complete_login({"state": ["forged"], "code": ["x"]})
 
     async def test_denied_consent_and_missing_sharing_scope_are_explicit(self):
@@ -358,7 +385,7 @@ class ChatGPTAuthTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await auth.access_token(), "access-2")
 
     def test_error_codes_map_to_plan_messages(self):
-        self.assertIn("Plus or Pro", str(api_error({"error": {"code": "subscription_sharing_v2_user_not_eligible"}}, 403)))
+        self.assertIn("Ollama locally", str(api_error({"error": {"code": "subscription_sharing_v2_user_not_eligible"}}, 403)))
         error = api_error({"error": {"code": "subscription_sharing_usage_unavailable"}}, 503)
         self.assertTrue(error.retryable)
         self.assertEqual(str(api_error({"error": {"code": "other", "message": "Server text"}}, 400)), "Server text")

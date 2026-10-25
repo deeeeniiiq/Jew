@@ -1,6 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron');
 const encoded = process.argv.find(arg => arg.startsWith('--clew-bootstrap='));
-if (!encoded) throw new Error('Clew desktop bootstrap is missing.');
+if (!encoded) throw new Error('Jew desktop bootstrap is missing.');
 const bootstrap = JSON.parse(decodeURIComponent(encoded.slice('--clew-bootstrap='.length)));
 contextBridge.exposeInMainWorld('clewDesktop', Object.freeze({
   ...bootstrap,

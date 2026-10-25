@@ -6,14 +6,14 @@ import { useChatModelSelection } from "./useChatModelSelection";
 const models = [{ id: "a", model: "a", displayName: "A", description: "", isDefault: true }];
 let root: Root;
 let selection: ReturnType<typeof useChatModelSelection>;
-function Harness({ graph }: { graph: string }) { selection = useChatModelSelection(null, graph, models); return null; }
+function Harness({ graph }: { graph: string }) { selection = useChatModelSelection(null, graph, models, "chatgpt"); return null; }
 beforeEach(() => { vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); localStorage.clear(); root = createRoot(document.createElement("div")); });
 afterEach(async () => { await act(async () => root.unmount()); vi.unstubAllGlobals(); });
 it("uses the latest selection for batched functional updates and persists it", async () => {
   await act(async () => root.render(<Harness graph="g" />));
   await act(async () => { selection.setSelectedChatModel((current) => `${current}-1`); selection.setSelectedChatModel((current) => `${current}-2`); });
   expect(selection.selectedChatModel).toBe("a-1-2");
-  expect(localStorage.getItem("clew_chatgpt_model_v1:g")).toBe("a-1-2");
+  expect(localStorage.getItem("jew_agent_model_v1:chatgpt:g")).toBe("a-1-2");
 });
 it("does not interpret inherited object keys as explicit model choices", async () => {
   await act(async () => root.render(<Harness graph="constructor" />));
@@ -30,5 +30,26 @@ it("keeps selections scoped to graphs and clearing one restores its plan default
   expect(selection.selectedChatModel).toBe("unavailable");
   await act(async () => { selection.setSelectedChatModel(null); });
   expect(selection.selectedChatModel).toBe("a");
-  expect(localStorage.getItem("clew_chatgpt_model_v1:first")).toBeNull();
+  expect(localStorage.getItem("jew_agent_model_v1:chatgpt:first")).toBeNull();
+});
+it("isolates per-provider model choices and migrates the legacy ChatGPT choice", async () => {
+  localStorage.setItem("clew_chatgpt_model_v1:g", "legacy-model");
+  function WithProvider({ provider }: { provider: "chatgpt" | "ollama" | "openai_api" }) {
+    selection = useChatModelSelection(null, "g", models, provider);
+    return null;
+  }
+  await act(async () => root.render(<WithProvider provider="chatgpt" />));
+  expect(selection.selectedChatModel).toBe("legacy-model");
+  expect(localStorage.getItem("jew_agent_model_v1:chatgpt:g")).toBe("legacy-model");
+  await act(async () => root.render(<WithProvider provider="ollama" />));
+  expect(selection.selectedChatModel).toBe("a");
+  await act(async () => selection.setSelectedChatModel("local-model"));
+  await act(async () => root.render(<WithProvider provider="openai_api" />));
+  expect(selection.selectedChatModel).toBe("a");
+  await act(async () => root.render(<WithProvider provider="ollama" />));
+  expect(selection.selectedChatModel).toBe("local-model");
+  await act(async () => root.render(<WithProvider provider="chatgpt" />));
+  expect(selection.selectedChatModel).toBe("legacy-model");
+  await act(async () => selection.setSelectedChatModel(null));
+  expect(localStorage.getItem("clew_chatgpt_model_v1:g")).toBeNull();
 });

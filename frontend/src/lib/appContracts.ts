@@ -6,7 +6,7 @@ export const ASSISTANT_WIDTH_STORAGE_KEY = "knowledge_graph_assistant_width_v1";
 export const ASSISTANT_MAX_WIDTH = 620;
 export const ASSISTANT_MIN_WIDTH = 280;
 export const ASSISTANT_COLLAPSE_THRESHOLD = 210;
-export const APP_NAME = "Clew";
+export const APP_NAME = "Jew";
 export const APP_TAGLINE = "AI-native workspace for structured learning";
 export const APP_FAVICON_LIGHT_SRC = "/clew-favicon-light-accent.png";
 export const APP_FAVICON_DARK_SRC = "/clew-mark.svg";
@@ -35,7 +35,7 @@ export const MEMORY_MODE_OPTIONS: Array<{
     id: "custom",
     label: "Custom",
     title: "Manual context mix",
-    description: "Choose fresh graph context and how much existing chat history to import. Clew keeps ongoing conversations.",
+    description: "Choose fresh graph context and how much existing chat history to import. Jew keeps ongoing conversations.",
   },
 ];
 
@@ -81,9 +81,11 @@ export type AuthSessionPayload = {
 
 export type ThemeMode = "dark" | "light";
 
-export type WorkspaceConfigPatch = Partial<Omit<WorkspaceConfig, "agent_backend">>;
+export type WorkspaceConfigPatch = Partial<WorkspaceConfig>;
 
 export type SettingsDrafts = {
+  agentBackend: WorkspaceConfig["agent_backend"];
+  rufloEnabled: boolean;
   model: string;
   reasoningEffort: ReasoningEffort | "";
   assistantNickname: string;

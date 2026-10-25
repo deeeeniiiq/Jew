@@ -16,7 +16,16 @@ class ChatGPTClient:
 
     def __init__(self, auth: ChatGPTAuth, http: httpx.AsyncClient | None = None):
         self.auth = auth
-        self.http = http or auth.http
+        self._http = http
+
+    @property
+    def http(self) -> httpx.AsyncClient:
+        # Share the OAuth transport only when a ChatGPT operation is requested.
+        return self._http if self._http is not None else self.auth.http
+
+    @http.setter
+    def http(self, value: httpx.AsyncClient) -> None:
+        self._http = value
 
     async def list_models(self) -> list[dict]:
         token = await self.auth.access_token()

@@ -312,8 +312,10 @@ export function computeClosureStatus(graph: GraphEnvelope | null, topicId: strin
     return state !== "solid" && state !== "mastered";
   });
   let latestAttempt: TopicClosureStatus["latest_attempt"] = null;
+  // Repository appends events in submission order. Prefer the last entry,
+  // including when timestamps tie or the imported record uses another format.
   for (const attempt of graph.quiz_attempts ?? []) {
-    if (attempt.topic_id === topicId && (!latestAttempt || attempt.created_at.localeCompare(latestAttempt.created_at) > 0)) latestAttempt = attempt;
+    if (attempt.topic_id === topicId) latestAttempt = attempt;
   }
   return {
     topic_id: topicId,

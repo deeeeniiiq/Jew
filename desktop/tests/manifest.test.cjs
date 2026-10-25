@@ -16,7 +16,7 @@ test('release metadata retains downloads for both Mac architectures', () => {
     for (const arch of ['arm64', 'x64']) {
       const folder = path.join(source, arch);
       fs.mkdirSync(folder, { recursive: true });
-      const asset = `Clew-1.0.0-mac-${arch}.zip`;
+      const asset = `Jew-1.0.0-mac-${arch}.zip`;
       fs.writeFileSync(path.join(folder, asset), arch);
       const sha512 = crypto.createHash('sha512').update(arch).digest('base64');
       fs.writeFileSync(path.join(folder, 'latest-mac.yml'), stringify({ version: '1.0.0', path: asset, sha512,
@@ -24,7 +24,7 @@ test('release metadata retains downloads for both Mac architectures', () => {
     }
     execFileSync(process.execPath, [path.join(__dirname, '../scripts/collect-release.cjs'), source, destination]);
     const manifest = parse(fs.readFileSync(path.join(destination, 'latest-mac.yml'), 'utf8'));
-    assert.deepEqual(manifest.files.map(file => file.url).sort(), ['Clew-1.0.0-mac-arm64.zip', 'Clew-1.0.0-mac-x64.zip']);
+    assert.deepEqual(manifest.files.map(file => file.url).sort(), ['Jew-1.0.0-mac-arm64.zip', 'Jew-1.0.0-mac-x64.zip']);
     fs.writeFileSync(path.join(source, 'x64', 'latest-mac.yml'), stringify({ version: '2.0.0', files: [] }));
     assert.throws(() => execFileSync(process.execPath, [path.join(__dirname, '../scripts/collect-release.cjs'), source, path.join(root, 'rejected')], { stdio: 'pipe' }));
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
@@ -35,7 +35,7 @@ test('release merge rejects corrupted assets, traversal and missing targets befo
   try {
     const source = path.join(root, 'source');
     fs.mkdirSync(source);
-    const asset = 'Clew-1.0.0-mac-arm64.zip';
+    const asset = 'Jew-1.0.0-mac-arm64.zip';
     const item = { url: asset, sha512: crypto.createHash('sha512').update('body').digest('base64'), size: 4 };
     fs.writeFileSync(path.join(source, asset), 'body');
     const manifest = files => fs.writeFileSync(path.join(source, 'latest-mac.yml'), stringify({ version: '1.0.0', files }));
@@ -60,7 +60,7 @@ test('Linux manifests retain verified AppImage and Debian downloads for each arc
       const folder = path.join(source, arch);
       fs.mkdirSync(folder, { recursive: true });
       const files = ['AppImage', 'deb'].map(extension => {
-        const url = `Clew-1.0.0-linux-${arch}.${extension}`;
+        const url = `Jew-1.0.0-linux-${arch}.${extension}`;
         const body = `${arch}-${extension}`;
         fs.writeFileSync(path.join(folder, url), body);
         return { url, size: Buffer.byteLength(body), sha512: crypto.createHash('sha512').update(body).digest('base64') };
@@ -72,10 +72,10 @@ test('Linux manifests retain verified AppImage and Debian downloads for each arc
     await collectRelease(source, output);
     for (const arch of ['x64', 'arm64']) {
       const manifest = parse(fs.readFileSync(path.join(output, arch === 'x64' ? 'latest-linux.yml' : 'latest-linux-arm64.yml'), 'utf8'));
-      assert.deepEqual(manifest.files.map(file => file.url), [`Clew-1.0.0-linux-${arch}.AppImage`, `Clew-1.0.0-linux-${arch}.deb`]);
+      assert.deepEqual(manifest.files.map(file => file.url), [`Jew-1.0.0-linux-${arch}.AppImage`, `Jew-1.0.0-linux-${arch}.deb`]);
       assert.equal(manifest.path, manifest.files[0].url);
     }
-    fs.writeFileSync(path.join(source, 'arm64', 'Clew-1.0.0-linux-arm64.deb'), 'corrupt');
+    fs.writeFileSync(path.join(source, 'arm64', 'Jew-1.0.0-linux-arm64.deb'), 'corrupt');
     await assert.rejects(collectRelease(source, path.join(root, 'rejected')), /checksum or size mismatch/);
     assert.equal(fs.existsSync(path.join(root, 'rejected')), false);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }

@@ -487,7 +487,7 @@ function extractExplicitRelationEntries(
       issues.push({
         code: "invalid_relation_annotation",
         level: "error",
-        message: `Invalid Clew relation entry "${entry}" in ${notePath}. Use requires::[[Target]] or [[Target]]::requires.`,
+        message: `Invalid Jew relation entry "${entry}" in ${notePath}. Use requires::[[Target]] or [[Target]]::requires.`,
       });
       continue;
     }

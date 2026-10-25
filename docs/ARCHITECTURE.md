@@ -1,5 +1,7 @@
 # Architecture
 
+> **Historical architecture (Clew).** This describes the earlier ChatGPT-only agent and required-authentication design. Jew 1.0.0 has a provider abstraction and a default local Ruflo + Ollama flow with no mandatory ChatGPT login. Read [Current Jew architecture](JEW_CURRENT.md) before using this page for implementation or operational decisions.
+
 Clew is a local, graph-first learning workspace. A small Clew-owned agent loop runs on the Responses API with the learner's ChatGPT plan (Sign in with ChatGPT); Clew owns the graph, review UI, study tools, grading and snapshots. [ADR 0006](adr/0006-sign-in-with-chatgpt-agent-runtime.md) records this boundary.
 
 ## Product guarantees

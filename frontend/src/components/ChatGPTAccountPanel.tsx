@@ -33,12 +33,12 @@ export function ChatGPTAccountPanel({ chatgpt, drafts, setDrafts }: {
       <span className="stAccountDot stAccountDotPending" aria-hidden="true" />
       <div className="stAccountMain">
         <div className="stAccountName" role="status">Finish signing in in your browser</div>
-        <div className="uiHelp">Allow Clew to use your ChatGPT plan, then return here.</div>
+        <div className="uiHelp">Allow Jew to use your ChatGPT plan, then return here.</div>
       </div>
       <a className="uiButton uiButtonSmall" href={login.authUrl} target="_blank" rel="noopener noreferrer">Open sign in</a>
       <button className="uiButton uiButtonQuiet uiButtonSmall" type="button" disabled={loading} onClick={() => void chatgpt.cancelLogin()}>Cancel</button>
     </div> : <div className="stConnect">
-      <p className="stLead">Sign in with ChatGPT to learn and build your graph. Clew uses your ChatGPT Plus or Pro plan; no API key is needed.</p>
+      <p className="stLead">Connect your ChatGPT account to use supported plan access. You can also choose local Ollama or an OpenAI API key above.</p>
       <button className="uiButton uiButtonPrimary" type="button" disabled={loading} onClick={() => void chatgpt.login()}>Sign in with ChatGPT</button>
     </div>}
     {(error || account?.error) ? <div className="inlineNotice inlineNoticeError" role="alert">{error ?? account?.error}</div> : null}

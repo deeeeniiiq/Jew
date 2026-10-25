@@ -1,4 +1,4 @@
-"""Entry point for the Clew Study Assist MCP stdio server."""
+"""Entry point for the Jew Study Assist MCP stdio server."""
 from __future__ import annotations
 
 import asyncio

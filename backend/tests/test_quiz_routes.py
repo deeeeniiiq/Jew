@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import AsyncMock, patch
-from app.models.domain import GraphProposal, PatchOperation, ProposalEdge, UpdateWorkspaceConfigRequest
+from app.models.domain import GraphProposal, PatchOperation, ProposalEdge, QuizQuestion, UpdateWorkspaceConfigRequest
+from app.core.config import Settings
 from app.services.quiz_service import QuizService
 from app.agent.chatgpt_auth import ChatGPTError
 from agent_test_support import install_client
@@ -25,6 +26,72 @@ class QuizRouteTests(unittest.TestCase):
         self.assertTrue(submitted.json()["attempt"]["passed"])
         self.assertTrue(submitted.json()["attempt"]["closure_awarded"])
         self.assertEqual(self.client.post(self.url+"/submit", json={"session_id": session["session_id"], "answers": answers}).status_code, 404)
+
+    def test_submission_returns_structured_report_and_consumes_session(self):
+        session = self.client.post(self.url + "/start", json={"question_count": 6}).json()["session"]
+        # A deliberately incomplete submission must distinguish an unanswered
+        # question from an incorrect selected alternative.
+        answers = [{"question_id": session["questions"][0]["id"], "choice_index": 1},
+                   {"question_id": session["questions"][1]["id"], "choice_index": 0}]
+        response = self.client.post(self.url + "/submit", json={"session_id": session["session_id"],
+                                                               "answers": answers})
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        report = body["report"]
+        self.assertEqual(report["attempt_id"], body["attempt"]["id"])
+        self.assertEqual((report["question_count"], report["answered_count"],
+                          report["correct_count"], report["incorrect_count"], report["unanswered_count"]),
+                         (6, 2, 1, 1, 4))
+        self.assertEqual(report["score"], body["attempt"]["score"])
+        self.assertEqual([item["question_id"] for item in report["question_findings"]],
+                         [item["id"] for item in session["questions"]])
+        self.assertEqual(report["historical_comparison"], None)
+        self.assertEqual(self.client.get(f"{self.url}/{session['session_id']}/draft").status_code, 404)
+
+    def test_study_draft_persists_and_rejects_stale_revision(self):
+        session = self.client.post(self.url + "/start", json={"question_count": 6}).json()["session"]
+        path = f"{self.url}/{session['session_id']}/draft"
+        empty = self.client.get(path)
+        self.assertEqual(empty.status_code, 200, empty.text)
+        self.assertEqual(empty.json()["revision"], 0)
+        qid = session["questions"][0]["id"]
+        payload = {"revision": 0, "answers": {qid: 2}, "notes": {qid: "Minha conta"},
+                   "active_question_id": qid, "flagged_question_ids": [qid],
+                   "strokes": {qid: [{"id": "stroke-1", "tool": "pen", "color": "#154DB3",
+                                       "width": 2, "points": [{"x": 0.25, "y": 0.75}]}]}}
+        saved = self.client.put(path, json=payload)
+        self.assertEqual(saved.status_code, 200, saved.text)
+        self.assertEqual(saved.json()["revision"], 1)
+        self.assertEqual(self.client.get(path).json()["strokes"], payload["strokes"])
+        self.assertEqual(self.client.put(path, json=payload).status_code, 409)
+        self.assertEqual(self.client.get(path).json()["revision"], 1)
+
+    def test_study_draft_checks_session_question_choices_and_drawing_limits(self):
+        session = self.client.post(self.url + "/start", json={"question_count": 6}).json()["session"]
+        path = f"{self.url}/{session['session_id']}/draft"
+        qid = session["questions"][0]["id"]
+        self.assertEqual(self.client.get(path.replace("arithmetics", "functions")).status_code, 404)
+        self.assertEqual(self.client.put(path, json={"answers": {"alien": 0}}).status_code, 400)
+        self.assertEqual(self.client.put(path, json={"answers": {qid: 9}}).status_code, 400)
+        self.assertEqual(self.client.put(path, json={"answers": {qid: True}}).status_code, 422)
+        self.assertEqual(self.client.put(path, json={"notes": {qid: "x" * 20001}}).status_code, 400)
+        self.assertEqual(self.client.put(path, json={"strokes": {qid: [{
+            "id": "large", "color": "#010203", "width": 2,
+            "points": [{"x": 0.2, "y": 0.3}] * 1201,
+        }]}}).status_code, 422)
+
+    def test_study_draft_is_removed_after_submission_and_manual_completion(self):
+        session = self.client.post(self.url + "/start", json={"question_count": 6}).json()["session"]
+        path = f"{self.url}/{session['session_id']}/draft"
+        self.assertEqual(self.client.put(path, json={"notes": {session['questions'][0]['id']: "before quiz"}}).status_code, 200)
+        answers = [{"question_id": question["id"], "choice_index": 1} for question in session["questions"]]
+        self.assertEqual(self.client.post(self.url + "/submit", json={"session_id": session["session_id"], "answers": answers}).status_code, 200)
+        self.assertEqual(self.client.get(path).status_code, 404)
+        again = self.client.post(self.url + "/start", json={"question_count": 6}).json()["session"]
+        new_path = f"{self.url}/{again['session_id']}/draft"
+        self.assertEqual(self.client.put(new_path, json={"notes": {again['questions'][0]['id']: "before manual"}}).status_code, 200)
+        self.assertEqual(self.client.post("/api/v1/graphs/mathematics-demo/topics/arithmetics/mark-finished").status_code, 200)
+        self.assertEqual(self.client.get(new_path).status_code, 404)
 
     def test_native_failure_returns_explicit_502(self):
         self.runtime.generate_closure_quiz = AsyncMock(side_effect=ChatGPTError("usage", "ChatGPT plan limit reached"))
@@ -62,6 +129,30 @@ class QuizRouteTests(unittest.TestCase):
         session = response.json()["session"]
         self.assertEqual(session["question_count"], 6)
         self.assertNotEqual(session["session_id"], previous["session_id"])
+
+    def test_unsafe_legacy_session_is_not_redisplayed_or_graded(self):
+        self.repo.update_workspace_config(UpdateWorkspaceConfigRequest(quiz_question_count=6))
+        previous = self.client.post(self.url + "/start", json={"question_count": 6}).json()["session"]
+        legacy = self.repo.quiz_session(previous["session_id"])
+        legacy.questions[0].prompt = "Quanto é 7 × 8?"
+        legacy.questions[0].choices = ["54", "56", "58", "64"]
+        legacy.questions[0].correct_choice_index = 0
+        self.repo.save_quiz_session(legacy)
+
+        before = self.repo.current().snapshot.id
+        rejected = self.client.post(self.url + "/submit", json={
+            "session_id": legacy.session_id, "answers": [],
+        })
+        self.assertEqual(rejected.status_code, 400, rejected.text)
+        self.assertIn("math verification", rejected.json()["detail"])
+        self.assertEqual(self.repo.current().snapshot.id, before)
+        self.assertEqual(self.repo.graph(legacy.graph_id).quiz_attempts, [])
+
+        replacement = self.client.post(self.url + "/start", json={"question_count": 6})
+        self.assertEqual(replacement.status_code, 200, replacement.text)
+        self.assertNotEqual(replacement.json()["session"]["session_id"], legacy.session_id)
+        self.assertNotIn("correct_choice_index", replacement.json()["session"]["questions"][0])
+        self.assertIn("verification_status", replacement.json()["session"]["questions"][0])
 
     def test_saved_threshold_rejects_nine_of_twelve_correct(self):
         self.repo.update_workspace_config(UpdateWorkspaceConfigRequest(pass_threshold=1))
@@ -119,3 +210,26 @@ class QuizRouteTests(unittest.TestCase):
         response = self.client.post(self.url+"/submit", json={"session_id": session["session_id"],
             "answers": [{"question_id": session["questions"][0]["id"], "choice_index": True}]})
         self.assertEqual(response.status_code, 422)
+
+    def test_manual_completion_does_not_delete_session_created_after_commit(self):
+        original = self.repo.mark_topic_finished
+        created = []
+
+        def mark_then_create_session(graph_id, topic_id):
+            workspace = original(graph_id, topic_id)
+            updated_graph = self.repo.graph(graph_id)
+            questions = [QuizQuestion(id=f"fresh-{i}", prompt=f"Question {i}?",
+                choices=["A", "B", "C", "D"], correct_choice_index=0) for i in range(6)]
+            session = QuizService(Settings()).start_session(
+                updated_graph, topic_id, 6,
+                questions=questions,
+                generator="test",
+            )
+            self.repo.save_quiz_session(session)
+            created.append(session.session_id)
+            return workspace
+
+        with patch.object(self.repo, "mark_topic_finished", side_effect=mark_then_create_session):
+            response = self.client.post("/api/v1/graphs/mathematics-demo/topics/arithmetics/mark-finished")
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(self.repo.quiz_session(created[0]).session_id, created[0])

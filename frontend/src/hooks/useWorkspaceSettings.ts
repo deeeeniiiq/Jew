@@ -42,6 +42,8 @@ export function useWorkspaceSettings({
   initialThemeMode,
 }: UseWorkspaceSettingsArgs): UseWorkspaceSettingsResult {
   const [drafts, setDraftsState] = useState<SettingsDrafts>({
+    agentBackend: "ollama",
+    rufloEnabled: false,
     model: "",
     reasoningEffort: "",
     assistantNickname: "",
@@ -102,6 +104,8 @@ export function useWorkspaceSettings({
   }
 
   const setDrafts: SettingsDraftSetters = {
+    agentBackend: (value) => updateDraft("agentBackend", value),
+    rufloEnabled: (value) => updateDraft("rufloEnabled", value),
     model: (value) => updateDraft("model", value),
     reasoningEffort: (value) => updateDraft("reasoningEffort", value),
     assistantNickname: (value) => updateDraft("assistantNickname", value),

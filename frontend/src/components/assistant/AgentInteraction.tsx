@@ -7,6 +7,7 @@ export type AgentControls = {
   stop: () => Promise<void>;
   reconnect: () => void;
   authenticated: boolean;
+  localAIWarning?: string | null;
   connect: () => void;
   openQuiz: (session: TopicQuizSession) => void;
 };

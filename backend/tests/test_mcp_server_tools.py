@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from app.mcp_server import server, tools
+from app.models.domain import QuizAttempt
 from app.services.repository import GraphRepository
 
 
@@ -30,6 +31,17 @@ class MpcServerToolsTests(unittest.TestCase):
         self.assertEqual(result["active_graph_id"], "mathematics-demo")
         self.assertEqual(len(result["graphs"]), 1)
         self.assertIn("in_progress_topics", result["graphs"][0])
+
+    def test_recent_quizzes_excludes_manual_completion_including_legacy_ids(self) -> None:
+        graph = self.workspace.graphs[0]
+        graph.quiz_attempts = [
+            QuizAttempt(id="graded", topic_id="functions", passed=False, score=0.5, question_count=6),
+            QuizAttempt.model_validate({"id": "manual-old", "topic_id": "functions", "passed": True,
+                                        "score": 1.0, "question_count": 6}),
+        ]
+        result = tools.get_current_context(self.workspace, graph_id=graph.graph_id)
+        self.assertEqual(len(result["recent_quizzes"]), 1)
+        self.assertEqual(result["recent_quizzes"][0]["score"], 0.5)
 
     def test_get_node_returns_neighbors_and_blockers(self) -> None:
         result = tools.get_node(self.workspace, graph_id="mathematics-demo", node_id="functions")

@@ -1,8 +1,10 @@
 import json
 import unittest
+from unittest.mock import AsyncMock, patch
 from pydantic import ValidationError
 from app.models.domain import UpdateWorkspaceConfigRequest, WorkspaceConfig
 from app.agent.context import turn_context
+from app.agent.chatgpt_auth import ChatGPTError
 from agent_test_support import install_client
 
 class WorkspaceConfigTests(unittest.TestCase):
@@ -65,4 +67,21 @@ class WorkspaceConfigTests(unittest.TestCase):
         self.assertEqual(foreign.status_code, 404)
         wrong = self.client.get("/auth/callback?state=x&code=y", headers={"host": "127.0.0.1:8787"})
         self.assertEqual(wrong.status_code, 400)
-        self.assertIn("not the one Clew started", wrong.text)
+        self.assertIn("not the one Jew started", wrong.text)
+
+    def test_callback_reports_storage_failures_without_leaking_secrets(self):
+        callback = "/auth/callback?state=test&code=private-authorization-code"
+        host = {"host": "127.0.0.1:8787"}
+        with patch.object(self.runtime.auth, "complete_login", new=AsyncMock(
+                side_effect=ChatGPTError("credential_storage_unavailable", "Windows could not securely save the connection."))):
+            response = self.client.get(callback, headers=host)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Windows could not securely save", response.text)
+        self.assertNotIn("private-authorization-code", response.text)
+
+        with patch.object(self.runtime.auth, "complete_login", new=AsyncMock(side_effect=OSError("private-secret"))):
+            response = self.client.get(callback, headers=host)
+        self.assertEqual(response.status_code, 503)
+        self.assertIn("Return to Jew and try again", response.text)
+        self.assertNotIn("private-secret", response.text)
+        self.assertNotIn("private-authorization-code", response.text)

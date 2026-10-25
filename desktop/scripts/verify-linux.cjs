@@ -34,12 +34,12 @@ function verifyAppImage(image) {
     execFileSync(path.resolve(image), ['--appimage-extract'], { cwd: stage, stdio: 'ignore', timeout: 60000 });
     const app = path.join(stage, 'squashfs-root');
     const launcher = fs.readFileSync(path.join(app, 'AppRun'), 'utf8');
-    if (launcher !== fs.readFileSync(path.join(__dirname, '../linux/AppRun'), 'utf8')) throw new Error('AppImage did not retain the Clew sandbox-preserving launcher.');
-    const desktop = fs.readFileSync(path.join(app, 'clew.desktop'), 'utf8');
+    if (launcher !== fs.readFileSync(path.join(__dirname, '../linux/AppRun'), 'utf8')) throw new Error('AppImage did not retain the Jew sandbox-preserving launcher.');
+    const desktop = fs.readFileSync(path.join(app, 'jew.desktop'), 'utf8');
     if (/^Exec=.*--no-sandbox/m.test(desktop)) throw new Error('AppImage desktop entry disables the sandbox.');
     const library = path.join(app, 'usr/lib/libnotify.so.4');
     requireNotifySymbol(library);
-    const electron = path.join(app, 'clew');
+    const electron = path.join(app, 'jew');
     const backend = path.join(app, 'resources/backend/ClewBackend');
     const exportCommit = path.join(app, 'resources/export/ClewExportCommit');
     requireElf(electron);

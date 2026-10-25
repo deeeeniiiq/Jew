@@ -5,6 +5,7 @@ import json
 from typing import TYPE_CHECKING
 
 from app.agent.context import graph_context
+from app.agent.ruflo_mcp import MODELS as RUFLO_MODELS, PREFIX as RUFLO_PREFIX
 from app.agent.contracts import CLOSURE_QUIZ_TOOLS, TOOL_MODELS, ClosureQuizDraft, InlineQuizDraft, ProposalDraft, QuestionDraft
 from app.models.domain import AgentActivity, AgentQuestion, ChatMessage, InlineChatQuiz, QuizQuestion, TopicQuizSessionPublic
 from app.services.proposal_service import ProposalService
@@ -22,6 +23,7 @@ LABELS = {
     "ask_question": "Waiting for your answer",
     "present_quiz": "Waiting for your answer",
     "create_closure_quiz": "Preparing your test",
+    **{RUFLO_PREFIX + name: "Ruflo: " + name.replace("_", " ") for name in RUFLO_MODELS},
 }
 
 
@@ -30,7 +32,7 @@ def public_quiz(session) -> TopicQuizSessionPublic:
 
 
 async def execute_tool(runtime: AgentRuntime, run: AgentRun, tool: str, call_id: str, raw_arguments: str) -> str:
-    """Run one Clew tool call and return its function_call_output text. Results are
+    """Run one Jew tool call and return its function_call_output text. Results are
     idempotent per call id, so a replayed call never repeats a side effect."""
     canonical = json.dumps({"tool": tool, "arguments": raw_arguments}, sort_keys=True, ensure_ascii=False)
     cached = runtime.store.tool_result(call_id, run.thread_key, canonical)
@@ -40,7 +42,7 @@ async def execute_tool(runtime: AgentRuntime, run: AgentRun, tool: str, call_id:
                           activity=AgentActivity(id=call_id, tool=tool, status="running", detail=LABELS.get(tool, tool)))
     try:
         if tool not in LABELS:
-            raise ValueError("Unknown Clew tool.")
+            raise ValueError("Unknown Jew tool.")
         if run.quiz_topic_id and tool not in CLOSURE_QUIZ_TOOLS:
             raise ValueError("This turn can only prepare the requested completion test.")
         try:
@@ -52,7 +54,10 @@ async def execute_tool(runtime: AgentRuntime, run: AgentRun, tool: str, call_id:
         parsed = TOOL_MODELS[tool].model_validate(arguments) if tool in TOOL_MODELS else None
         runtime.publish_message(run, message)
         graph = runtime.repository.graph(run.graph_id)
-        if tool == "read_graph":
+        if tool.startswith(RUFLO_PREFIX):
+            result = await runtime.ruflo.call(tool[len(RUFLO_PREFIX):], arguments,
+                enabled=runtime.repository.current().workspace.config.ruflo_enabled)
+        elif tool == "read_graph":
             if arguments:
                 raise ValueError("read_graph takes no arguments.")
             result = graph_context(graph)
@@ -72,7 +77,7 @@ async def execute_tool(runtime: AgentRuntime, run: AgentRun, tool: str, call_id:
             message.action = tool
             result = {"status": "awaiting_review", "proposal_id": proposal.proposal_envelope.proposal_id,
                       "base_graph_version": graph.version, "preview": proposal.apply_plan.preview.model_dump(),
-                      "message": "The proposal is ready in Clew. The user must accept it before the graph changes."}
+                      "message": "The proposal is ready in Jew. The user must accept it before the graph changes."}
         elif tool in {"ask_question", "present_quiz"}:
             interaction_id = f"question-{call_id}"
             future = asyncio.get_running_loop().create_future()
@@ -107,9 +112,9 @@ async def execute_tool(runtime: AgentRuntime, run: AgentRun, tool: str, call_id:
             run.quiz_session = session
             message.closure_quiz = public_quiz(session)
             result = {"status": "ready", "session_id": session.session_id, "topic_id": session.topic_id,
-                      "question_count": session.question_count, "message": "The learner takes the test in Clew. Clew grades it and awards completion."}
+                      "question_count": session.question_count, "message": "The learner takes the test in Jew. Jew grades it and awards completion."}
         else:
-            raise ValueError("Unknown Clew tool.")
+            raise ValueError("Unknown Jew tool.")
         message.activity.status = "completed"
         runtime.publish_message(run, message)
         output = json.dumps(result, ensure_ascii=False)

@@ -205,5 +205,9 @@ def fake_auth(peer: FakeChatGPT, registration_path: Path, connection: dict | Non
 
 
 def fake_runtime(settings, repository, peer: FakeChatGPT, signed: bool = True) -> AgentRuntime:
+    # The production default is now Ollama. This fixture specifically tests
+    # ChatGPT integration and must choose its mocked provider explicitly.
+    from app.models.domain import UpdateWorkspaceConfigRequest
+    repository.update_workspace_config(UpdateWorkspaceConfigRequest(agent_backend="chatgpt"))
     auth = fake_auth(peer, settings.db_path.parent / "chatgpt-registration.json", signed_in() if signed else None)
     return AgentRuntime(settings, repository, auth=auth, client=ChatGPTClient(auth))

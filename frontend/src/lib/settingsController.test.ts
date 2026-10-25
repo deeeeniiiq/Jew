@@ -6,6 +6,7 @@ import type { WorkspaceConfig } from "./types";
 function makeConfig(): WorkspaceConfig {
   return {
     agent_backend: "chatgpt",
+    ruflo_enabled: false,
     default_model: "gpt-test",
     reasoning_effort: null,
     ui_language: "en",

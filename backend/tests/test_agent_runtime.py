@@ -160,7 +160,7 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         _, run = await self.start(model="hidden-model")
         await self.complete(run)
         self.assertEqual(run.status, "failed")
-        self.assertIn("not available", run.error)
+        self.assertIn("unavailable", run.error)
         self.assertEqual(self.peer.requests, [])
 
     async def test_workspace_model_and_effort_are_sent(self):
@@ -227,8 +227,8 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         async def models():
             entered.set()
             await release.wait()
-            return [{"model": "test-model"}]
-        self.runtime.models = models
+            return [{"slug": "test-model", "display_name": "Test model"}]
+        self.runtime.client.list_models = models
         account = asyncio.create_task(self.runtime.account())
         await asyncio.wait_for(entered.wait(), 2)
         await self.runtime.logout()

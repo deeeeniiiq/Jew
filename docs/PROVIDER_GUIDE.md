@@ -1,5 +1,7 @@
 # ChatGPT connection
 
+> **Historical Clew guide.** The single-provider and mandatory-login statements below describe an earlier architecture. Jew 1.0.0 supports Ruflo + Ollama, Ollama, Codex CLI, OpenAI API and ChatGPT. See [Current Jew guide](JEW_CURRENT.md) for accurate provider setup.
+
 Clew 1.0.0 uses Sign in with ChatGPT and the Responses API. There are no Gemini, API-key, Codex CLI, or alternate-provider modes.
 
 Select **Continue with ChatGPT** on the entry screen and approve plan usage in your browser. Clew requires a ChatGPT Plus or Pro plan. Identity-only consent does not unlock the workspace. Tokens stay in the OS credential store; the installation ID, issued client ID and verified account label stay next to the database.

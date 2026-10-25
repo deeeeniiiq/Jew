@@ -29,6 +29,12 @@ class TopicArtifactInput(BaseModel):
     body: str = Field(min_length=1, max_length=12000)
 
 
+class LessonGenerateRequest(BaseModel):
+    """Generate a local lesson. The chosen model must be installed in Ollama."""
+
+    model: str | None = Field(default=None, min_length=1, max_length=160)
+
+
 class CreateSessionRequest(BaseModel):
     topic_id: str | None = None
     title: str | None = None

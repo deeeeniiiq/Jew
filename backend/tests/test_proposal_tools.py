@@ -218,3 +218,35 @@ class ProposalToolTests(unittest.TestCase):
         response = self.client.post("/api/v1/workspace/graphs/import", json={"package": package})
         self.assertEqual(response.status_code, 422)
         self.assertEqual(self.repo.current().snapshot.id, before)
+
+    def test_import_rejects_cyclic_prerequisites_with_client_error(self):
+        package = self.repo.export_graph_package(self.graph_id).model_dump(mode="json")
+        package["graph"]["edges"].append({
+            "id": "invalid-cycle", "source_topic_id": "algebra-basics",
+            "target_topic_id": "arithmetics", "relation": "requires",
+        })
+        before = self.repo.current().snapshot.id
+        response = self.client.post("/api/v1/workspace/graphs/import", json={"package": package})
+        self.assertEqual(response.status_code, 400, response.text)
+        self.assertIn("directed cycles", response.json()["detail"])
+        self.assertEqual(self.repo.current().snapshot.id, before)
+
+    def test_import_rejects_unsupported_package_and_duplicate_attempts_with_client_error(self):
+        for defect in ("kind", "version", "duplicate-attempt"):
+            with self.subTest(defect=defect):
+                package = self.repo.export_graph_package(self.graph_id).model_dump(mode="json")
+                if defect == "kind":
+                    package["kind"] = "unknown_graph_export"
+                elif defect == "version":
+                    package["version"] = 999
+                else:
+                    attempt = {
+                        "id": "repeated-attempt", "topic_id": "functions", "passed": True,
+                        "score": 1.0, "question_count": 6,
+                    }
+                    package["graph"]["quiz_attempts"] = [attempt, attempt.copy()]
+
+                before = self.repo.current().snapshot.id
+                response = self.client.post("/api/v1/workspace/graphs/import", json={"package": package})
+                self.assertEqual(response.status_code, 400, response.text)
+                self.assertEqual(self.repo.current().snapshot.id, before)

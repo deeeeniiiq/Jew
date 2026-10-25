@@ -54,6 +54,9 @@ export function QuizDialog({
       </>}
     >
       {error ? <div className="inlineNotice inlineNoticeError">{error}</div> : null}
+      {!reviews && session.questions.some((question) => question.verification_status !== "verified")
+        ? <div className="inlineNotice" role="status">{copy.quiz.unverifiedNotice}</div>
+        : null}
       {reviews ? (
         <ol className="quizList">
           {reviews.map((review) => (
@@ -72,6 +75,8 @@ export function QuizDialog({
           {session.questions.map((question) => (
             <li key={question.id} className="quizItem">
               <div className="quizPrompt">{renderDisplayText(question.prompt)}</div>
+              <div className="quizNote">{question.verification_status === "verified"
+                ? copy.quiz.verifiedLabel : copy.quiz.unverifiedLabel}</div>
               <div className="quizChoices">
                 {question.choices.map((choice: string, index: number) => (
                   <button

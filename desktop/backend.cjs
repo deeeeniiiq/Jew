@@ -10,7 +10,7 @@ function launchBackend({ root, resources, dataDir, logsDir, packaged, log, pytho
   fs.mkdirSync(logsDir, { recursive: true, mode: 0o700 });
   const token = crypto.randomBytes(32).toString('hex');
   const command = packaged ? path.join(resources, 'backend', process.platform === 'win32' ? 'ClewBackend.exe' : 'ClewBackend') : python;
-  if (!command || !fs.existsSync(command)) throw new Error('Clew backend is missing. Reinstall the app or run the development setup.');
+  if (!command || !fs.existsSync(command)) throw new Error('Jew backend is missing. Reinstall the app or run the development setup.');
   const child = spawn(command, packaged ? [] : [path.join(root, 'backend', 'desktop_entry.py')], {
     cwd: dataDir, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'],
     env: { ...process.env, PYTHONPATH: packaged ? '' : path.join(root, 'backend'),
@@ -20,12 +20,15 @@ function launchBackend({ root, resources, dataDir, logsDir, packaged, log, pytho
   let ready = false;
   let settled = false;
   let stopped;
+  // On Windows, 'exit' can fire while the process still has open stdio
+  // handles. Wait for 'close' before callers remove its working directory.
+  const childClosed = new Promise(resolve => child.once('close', resolve));
   child.stdin.on('error', error => {
     if (!['EPIPE', 'ERR_STREAM_DESTROYED'].includes(error.code)) log(`Backend lifetime pipe failed: ${error.message}`);
   });
   child.on('exit', (code, signal) => { if (ready) onExit?.(code, signal); });
   const startup = new Promise((resolve, reject) => {
-    const timer = setTimeout(() => { child.kill(); finish(new Error('Clew backend did not become ready within 30 seconds.')); }, 30000);
+    const timer = setTimeout(() => { child.kill(); finish(new Error('Jew backend did not become ready within 30 seconds.')); }, 30000);
     const finish = (error, value) => {
       if (settled) return;
       settled = true;
@@ -34,14 +37,14 @@ function launchBackend({ root, resources, dataDir, logsDir, packaged, log, pytho
     };
     child.once('error', error => finish(error));
     child.once('exit', (code, signal) => {
-      if (!ready) finish(new Error(`Clew backend exited before startup (${code ?? signal}). See the desktop log.`));
+      if (!ready) finish(new Error(`Jew backend exited before startup (${code ?? signal}). See the desktop log.`));
     });
     readline.createInterface({ input: child.stdout }).on('line', line => {
       let message;
       try { message = JSON.parse(line); } catch { log(line); return; }
       if (message?.event !== 'ready' || settled) return;
       if (!Number.isInteger(message.port) || message.port < 1 || message.port > 65535 || message.version !== version) {
-        child.kill(); finish(new Error('Clew backend returned an invalid startup contract.')); return;
+        child.kill(); finish(new Error('Jew backend returned an invalid startup contract.')); return;
       }
       ready = true;
       finish(null, { apiBase: `http://127.0.0.1:${message.port}`, sessionToken: token });
@@ -50,7 +53,10 @@ function launchBackend({ root, resources, dataDir, logsDir, packaged, log, pytho
   });
   function stop() {
     if (stopped) return stopped;
-    if (child.exitCode !== null || child.signalCode !== null) return;
+    if (child.exitCode !== null || child.signalCode !== null) {
+      stopped = childClosed.then(() => ({ forced: false }));
+      return stopped;
+    }
     stopped = new Promise((resolve, reject) => {
       let forced = false;
       const force = setTimeout(() => {
@@ -59,7 +65,7 @@ function launchBackend({ root, resources, dataDir, logsDir, packaged, log, pytho
         child.kill('SIGKILL');
       }, 5000);
       const deadline = setTimeout(() => { clearTimeout(force); reject(new Error('The local backend could not be stopped.')); }, 8000);
-      child.once('exit', () => { clearTimeout(force); clearTimeout(deadline); resolve({ forced }); });
+      childClosed.then(() => { clearTimeout(force); clearTimeout(deadline); resolve({ forced }); });
       // EOF also happens if the parent crashes. The backend must watch stdin and
       // request graceful uvicorn shutdown; signals alone are abrupt on Windows.
       child.stdin.end();

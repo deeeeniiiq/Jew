@@ -1,10 +1,10 @@
-"""MCP stdio server for Clew.
+"""MCP stdio server for Jew.
 
-Wires four read-only tools over the user's local Clew workspace so that
+Wires four read-only tools over the user's local Jew workspace so that
 any MCP client (Claude Desktop, Claude Code, Cursor, ...) can see their
 graphs, current learning progress, and note contents.
 
-The server loads the workspace from the same SQLite database the Clew
+The server loads the workspace from the same SQLite database the Jew
 backend uses (``knowledge_graph.sqlite3``). The database path is resolved
 from the existing backend settings (``KG_DB_PATH`` / ``DB_PATH``), so no
 extra configuration is required when running alongside the regular backend.
@@ -28,11 +28,11 @@ from . import tools as tool_impls
 
 
 logger = logging.getLogger("clew.study_assist")
-SERVER_NAME = "Clew Study Assist"
+SERVER_NAME = "Jew Study Assist"
 
 
 SERVER_INSTRUCTIONS = """\
-Clew holds the user's learning graphs. Nodes are study topics with a \
+Jew holds the user's learning graphs. Nodes are study topics with a \
 progress state (not_started, learning, shaky, needs_review, solid, \
 mastered). Edges describe relationships between topics, with the \
 ``requires`` relation representing prerequisites. The user can have \
@@ -61,7 +61,7 @@ TOOLS: list[types.Tool] = [
     types.Tool(
         name="list_graphs",
         description=(
-            "List every learning graph the user has in Clew with light "
+            "List every learning graph the user has in Jew with light "
             "progress stats (total topics, closed topics, in-progress "
             "topics). Use this when the user mentions a subject or graph "
             "you have not seen yet, or when you need to pick a graph_id "
@@ -213,7 +213,7 @@ def build_server(repository: GraphRepository) -> Server:
         except Exception as exc:  # pragma: no cover - defensive
             logger.exception("mcp tool %s failed", name)
             return _error_result(
-                "internal error while executing the Clew Study Assist MCP tool",
+                "internal error while executing the Jew Study Assist MCP tool",
                 payload={"error": f"internal error: {exc}"},
             )
 
@@ -224,7 +224,7 @@ async def run_stdio() -> None:
     db_path = _resolve_db_path()
     if not db_path.exists():
         raise FileNotFoundError(
-            "Clew database not found. Run Clew once to create it or set "
+            "Jew database not found. Run Jew once to create it or set "
             f"CLEW_DB_PATH/KG_DB_PATH explicitly. Expected path: {db_path}"
         )
     logger.info("clew-study-assist starting with db=%s", db_path)
