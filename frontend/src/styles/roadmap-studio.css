@@ -1,7 +1,7 @@
 /* Study paths borrow from field notebooks: warm paper, ink, chapter markers and connective routes. */
-.jewLearningOverlay { position: fixed; inset: 0; z-index: 11000; padding: clamp(8px, 2vw, 24px); display: grid; place-items: center; background: rgba(15, 18, 23, .74); backdrop-filter: blur(14px); }
-.jewLearningPanel { --jew-ink: #25302c; --jew-sub: #66736b; --jew-rule: #deded5; --jew-paper: #f6f4ed; --jew-card: #fffefa; --jew-green: #37775a; --jew-highlight: #e4eddd; position: relative; width: min(1230px, 100%); max-height: 100%; overflow-y: auto; overscroll-behavior: contain; border-radius: 20px; color: var(--jew-ink); background: var(--jew-paper); box-shadow: 0 22px 100px rgba(0,0,0,.32); }
-.app[data-theme="dark"] .jewLearningPanel { --jew-ink: #e7eae5; --jew-sub: #a3b1a5; --jew-rule: #39433e; --jew-paper: #17221e; --jew-card: #202e28; --jew-green: #9dd5a9; --jew-highlight: #29473a; }
+.jewLearningOverlay { position: fixed; inset: 0; z-index: 11000; padding: clamp(8px, 2vw, 24px); display: grid; place-items: center; background: rgba(0, 0, 0, .76); backdrop-filter: blur(3px); }
+.jewLearningPanel { --jew-ink: #f0ebe1; --jew-sub: #aaa69d; --jew-rule: #383631; --jew-paper: #0f0f0e; --jew-card: #1b1b19; --jew-green: #d9ad45; --jew-highlight: #30291b; position: relative; width: min(1230px, 100%); max-height: 100%; overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--jew-rule); border-radius: 8px; color: var(--jew-ink); background: var(--jew-paper); box-shadow: 0 22px 70px rgba(0,0,0,.45); }
+.app[data-theme="light"] .jewLearningPanel { --jew-ink: #2f2b25; --jew-sub: #665f54; --jew-rule: #d4ccbf; --jew-paper: #f5f1e9; --jew-card: #fdfbf6; --jew-green: #795a1c; --jew-highlight: #f1e7d1; }
 .jewLearningPanel * { box-sizing: border-box; }
 .jewLearningPanel button, .jewLearningPanel input, .jewLearningPanel select, .jewLearningPanel textarea { font: inherit; }
 .jewLearningPanel button { cursor: pointer; }
@@ -22,7 +22,7 @@
 .jewFormSectionTitle small { color: var(--jew-sub); font-size: 12px; }
 .jewSectionGap { margin-top: 42px; }
 .jewProfessionGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-.jewProfession { min-height: 58px; padding: 12px 14px; text-align: left; display: flex; justify-content: space-between; align-items: center; gap: 10px; border: 1px solid var(--jew-rule); border-radius: 9px; color: var(--jew-ink); background: var(--jew-card); font-size: 13px !important; font-weight: 570 !important; }
+.jewProfession { min-height: 58px; padding: 12px 14px; text-align: left; display: flex; justify-content: space-between; align-items: center; gap: 10px; border: 1px solid var(--jew-rule); border-radius: 5px; color: var(--jew-ink); background: var(--jew-card); font-size: 13px !important; font-weight: 570 !important; }
 .jewProfession > span:last-child { color: var(--jew-green); }
 .jewProfession:is(:hover, .isSelected) { background: var(--jew-highlight); border-color: var(--jew-green); }
 .jewFormGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
@@ -31,11 +31,11 @@
 .jewField :is(input, select, textarea) { width: 100%; min-height: 46px; padding: 12px 14px; border: 1px solid var(--jew-rule); border-radius: 10px; outline: none; color: var(--jew-ink); background: var(--jew-card); resize: vertical; font-weight: 400; }
 .jewField :is(input, select, textarea):focus { border-color: var(--jew-green); }
 .jewInterestChips { display: flex; flex-wrap: wrap; gap: 8px; }
-.jewInterestChips button { padding: 9px 13px; border: 1px solid var(--jew-rule); border-radius: 999px; color: var(--jew-ink); background: var(--jew-card); font-size: 12px; }
+.jewInterestChips button { padding: 9px 13px; border: 1px solid var(--jew-rule); border-radius: 5px; color: var(--jew-ink); background: var(--jew-card); font-size: 12px; }
 .jewInterestChips button.isSelected { background: var(--jew-highlight); border-color: var(--jew-green); }
 .jewFormActions, .jewPreviewToolbar, .jewPreviewBottom { display: flex; align-items: center; justify-content: flex-end; gap: 16px; margin-top: 24px; }
-.jewPrimaryButton { border: 0; border-radius: 9px; padding: 13px 19px; color: #fff; background: #356c51; font-size: 13px !important; font-weight: 730 !important; }
-.jewPrimaryButton:hover { background: #24593f; }
+.jewPrimaryButton { border: 0; border-radius: 5px; padding: 13px 19px; color: #161512; background: #d9ad45; font-size: 13px !important; font-weight: 730 !important; }
+.jewPrimaryButton:hover { background: #e7bd60; }
 .jewTextButton { border: none; padding: 9px 5px; background: none; color: var(--jew-sub); font-size: 13px; }
 .jewTextButton:hover { color: var(--jew-green); }
 .jewInlineError, .jewSourceNotice { border-radius: 10px; border: 1px solid #bd8b53; background: #dbab6730; padding: 13px 16px; color: var(--jew-ink); font-size: 13px; }

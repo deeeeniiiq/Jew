@@ -99,6 +99,26 @@ export function cardTitleLines(title: string, maxCharacters = 26): string[] {
   return [lines[0], `${lines.slice(1).join(" ").slice(0, maxCharacters - 1)}…`];
 }
 
+export function fitCardViewport(
+  cards: Array<{ center: GraphPoint; size: CardSize }>, viewport: CardSize, padding = 48,
+): { zoom: number; panOffset: GraphPoint } | null {
+  if (cards.length === 0 || viewport.width <= padding * 2 || viewport.height <= padding * 2) return null;
+  let left = Infinity;
+  let right = -Infinity;
+  let top = Infinity;
+  let bottom = -Infinity;
+  for (const { center, size } of cards) {
+    const box = cardBounds(center, size);
+    left = Math.min(left, box.left);
+    right = Math.max(right, box.right);
+    top = Math.min(top, box.top);
+    bottom = Math.max(bottom, box.bottom);
+  }
+  const zoom = clamp(Math.min((viewport.width - padding * 2) / Math.max(1, right - left),
+    (viewport.height - padding * 2) / Math.max(1, bottom - top)), 0.22, 1.4);
+  return { zoom, panOffset: { x: viewport.width / 2 - (left + right) / 2, y: viewport.height / 2 - (top + bottom) / 2 } };
+}
+
 export type ZoneGeometry = {
   center: { x: number; y: number };
   spread: number;

@@ -618,6 +618,8 @@ export type LearnerProfile = {
   interests: string[];
   level: LearnerLevel;
   goal: string;
+  study_hours_per_week: number;
+  learning_preferences: string[];
   github: string;
   instagram: string;
   onboarding_complete: boolean;
@@ -628,6 +630,8 @@ export type RoadmapGenerateRequest = {
   profession: string;
   level: LearnerLevel;
   goal: string;
+  study_hours_per_week: number;
+  learning_preferences: string[];
   language: RoadmapLanguage;
   model?: string | null;
 };

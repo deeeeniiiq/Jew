@@ -17,6 +17,7 @@ import {
   clamp,
   cloneManualNodePositions,
   edgeRenderMotion,
+  fitCardViewport,
   graphCanvasPalette,
   hashString,
   hexToRgb,
@@ -1224,8 +1225,8 @@ function GraphCanvasComponent({
         if (!sourceNode || !targetNode) continue;
         const start = cardEdgeAnchor(from, cardSize(sourceNode), to);
         const destination = cardEdgeAnchor(to, cardSize(targetNode), from);
-        const targetX = start.x + (destination.x - start.x) * edgeBrightness;
-        const targetY = start.y + (destination.y - start.y) * edgeBrightness;
+        const targetX = destination.x;
+        const targetY = destination.y;
         const bundleMeta = bundleMetaByEdgeId.get(edge.id);
         const bundleAngle = bundleMeta?.angle ?? Math.atan2(targetY - from.y, targetX - from.x);
         const bundleDist = Math.max(16, Math.min(46, Math.hypot(targetX - from.x, targetY - from.y) * 0.24));
@@ -1260,15 +1261,15 @@ function GraphCanvasComponent({
               ctx2.strokeStyle = rgbaString(rgb, Math.max(0.22, pulse * 0.72 * edgeBrightness));
             }
           } else {
-            ctx2.strokeStyle = `rgba(${paletteRef.current.edgeRgb},${Math.max(0.04, pulse * edgeBrightness)})`;
+            ctx2.strokeStyle = `rgba(${paletteRef.current.edgeRgb},${Math.max(0.42, pulse * edgeBrightness)})`;
           }
           ctx2.lineWidth = 1.7;
         } else if (onFrontier) {
           ctx2.setLineDash([7, 9]);
-          ctx2.strokeStyle = `rgba(${paletteRef.current.edgeRgb},${0.012 + 0.05 * edgeBrightness})`;
+          ctx2.strokeStyle = `rgba(${paletteRef.current.edgeRgb},${0.23 + 0.17 * edgeBrightness})`;
           ctx2.lineWidth = 1;
         } else {
-          ctx2.strokeStyle = `rgba(${paletteRef.current.edgeRgb},${0.012 + 0.05 * edgeBrightness})`;
+          ctx2.strokeStyle = `rgba(${paletteRef.current.edgeRgb},${0.23 + 0.17 * edgeBrightness})`;
           ctx2.lineWidth = 1;
         }
         ctx2.stroke();
@@ -1283,7 +1284,6 @@ function GraphCanvasComponent({
         const litFrame = litFrameRef.current.get(node.id);
         const fadeRate = Math.max(18, cascadeStepFramesRef.current * 1.5);
         const brightness = litFrame === undefined ? 0 : Math.min(1, Math.max(0, (frameCount - litFrame) / fadeRate));
-        if (brightness < 0.02) continue;
         const selected = selectedTopicIdRef.current === node.id;
         const onPath = pathNodeIdsRef.current.has(node.id);
         const contextual = ancestorIdsRef.current.has(node.id);
@@ -1301,7 +1301,7 @@ function GraphCanvasComponent({
           ? selected ? "#FFF5DE" : mastered ? "#E8F1E9" : learning ? "#EAF0F4" : reviewing ? "#F8ECE8" : "#F8F5EF"
           : selected ? "#2C2519" : mastered ? "#1B2922" : learning ? "#1B2730" : reviewing ? "#2C211E" : "#1A1A19";
         ctx2.save();
-        ctx2.globalAlpha = Math.max(0.12, brightness);
+        ctx2.globalAlpha = 0.82 + 0.18 * brightness;
         ctx2.beginPath();
         ctx2.roundRect(bounds.left, bounds.top, size.width, size.height, 5);
         ctx2.fillStyle = fill;
@@ -1382,6 +1382,41 @@ function GraphCanvasComponent({
     });
   }
 
+  function fitGraph(): void {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const fit = fitCardViewport(nodesDataRef.current.flatMap((node) => {
+      const center = nodesRef.current.get(node.id);
+      return center ? [{ center, size: cardSize(node) }] : [];
+    }), { width: rect.width, height: rect.height }, 64);
+    if (!fit) return;
+    zoomRef.current = fit.zoom;
+    panOffsetRef.current = fit.panOffset;
+    onSelectedTopicAnchorChangeRef.current(buildTopicAnchor(selectedTopicIdRef.current));
+  }
+
+  function zoomFromControls(factor: number): void {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    applyZoomAtClientPoint(zoomRef.current * factor, rect.left + rect.width / 2, rect.top + rect.height / 2);
+    onSelectedTopicAnchorChangeRef.current(buildTopicAnchor(selectedTopicIdRef.current));
+  }
+
+  function onCanvasKeyDown(event: React.KeyboardEvent<HTMLCanvasElement>): void {
+    if (event.key.toLowerCase() === "f") fitGraph();
+    else if (event.key === "+" || event.key === "=") zoomFromControls(1.2);
+    else if (event.key === "-") zoomFromControls(1 / 1.2);
+    else if (event.key.startsWith("Arrow")) {
+      const step = 72;
+      panOffsetRef.current = {
+        x: panOffsetRef.current.x + (event.key === "ArrowLeft" ? step : event.key === "ArrowRight" ? -step : 0),
+        y: panOffsetRef.current.y + (event.key === "ArrowUp" ? step : event.key === "ArrowDown" ? -step : 0),
+      };
+      onSelectedTopicAnchorChangeRef.current(buildTopicAnchor(selectedTopicIdRef.current));
+    } else return;
+    event.preventDefault();
+  }
+
   function buildTopicAnchor(topicId: string | null): TopicAnchorPoint | null {
     if (!topicId) return null;
     const rect = containerRef.current?.getBoundingClientRect();
@@ -1422,6 +1457,7 @@ function GraphCanvasComponent({
 
   function onPointerDown(event: React.PointerEvent<HTMLCanvasElement>): void {
     document.body.style.userSelect = "none";
+    canvasRef.current?.focus();
     activePointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
     if (canvasRef.current) {
       canvasRef.current.setPointerCapture(event.pointerId);
@@ -1640,12 +1676,20 @@ function GraphCanvasComponent({
       <canvas
         ref={canvasRef}
         className="neuroGraphCanvas"
+        tabIndex={0}
+        aria-label="Roadmap 2D interativo. Use as setas para mover, mais ou menos para zoom e F para ajustar."
+        onKeyDown={onCanvasKeyDown}
         style={{ cursor: layoutEditMode ? "crosshair" : "grab", touchAction: "none", background: backgroundFill ?? "transparent" }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerCancel}
       />
+      <div className="graphViewportControls" aria-label="Controles do roadmap">
+        <button type="button" onClick={() => zoomFromControls(1 / 1.2)} aria-label="Diminuir zoom" title="Diminuir zoom">−</button>
+        <button type="button" onClick={() => zoomFromControls(1.2)} aria-label="Aumentar zoom" title="Aumentar zoom">+</button>
+        <button type="button" onClick={fitGraph} title="Ajustar todo o roadmap (F)">Ajustar</button>
+      </div>
     </div>
   );
 }

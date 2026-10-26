@@ -22,6 +22,7 @@ type SettingsModalProps = {
   isSettingsOpen: boolean;
   copy: AppCopy;
   setSettingsOpen: StateSetter<boolean>;
+  onEditLearnerProfile: () => void;
   currentConfig: WorkspaceConfig | null;
   drafts: SettingsDrafts;
   setDrafts: SettingsDraftSetters;
@@ -45,6 +46,7 @@ export function SettingsModal(props: SettingsModalProps): React.JSX.Element | nu
     isSettingsOpen,
     copy,
     setSettingsOpen,
+    onEditLearnerProfile,
     currentConfig,
     drafts,
     setDrafts,
@@ -123,6 +125,7 @@ export function SettingsModal(props: SettingsModalProps): React.JSX.Element | nu
 
               <section className="stSection">
                 <SectionHead eyebrow="Preferences" title="Assistant and workspace" />
+                <button className="uiButton uiButtonQuiet" type="button" onClick={onEditLearnerProfile}>Editar dados de aprendizagem</button>
                 <label className="uiField">
                   <span className="uiLabel">{copy.settingsPanel.assistantNickname}</span>
                   <input

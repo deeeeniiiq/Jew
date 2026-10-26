@@ -6,7 +6,7 @@ from uuid import uuid4
 from pathlib import Path
 
 from app.models.api import ObsidianExportOptions
-from app.models.domain import Artifact, CreateGraphRequest, Edge, GraphProposal, PatchOperation, ProposalTopic, ProposalZone, QuizAttempt, ResourceLink, StudyGraph, Topic, Zone
+from app.models.domain import Artifact, CreateGraphRequest, Edge, GraphProposal, LearnerProfile, PatchOperation, ProposalTopic, ProposalZone, QuizAttempt, ResourceLink, StudyGraph, Topic, Zone
 from app.services.obsidian_export import build_obsidian_export_package
 from app.services.assessment_service import AssessmentService
 from app.services.repository import GraphRepository
@@ -17,6 +17,18 @@ class RepositoryGraphTests(unittest.TestCase):
         tempdir = tempfile.TemporaryDirectory()
         self.addCleanup(tempdir.cleanup)
         self.repository = GraphRepository(Path(tempdir.name) / "state.sqlite3")
+
+    def test_learning_profile_survives_restart_without_replacing_graphs(self) -> None:
+        graph_ids = [graph.graph_id for graph in self.repository.current().workspace.graphs]
+        profile = LearnerProfile(
+            display_name="Ana", profession="Biologia", goal="Estudar genética",
+            study_hours_per_week=5, learning_preferences=["Leitura guiada", "Exercícios"],
+            onboarding_complete=True,
+        )
+        self.repository.save_learner_profile(profile)
+        reopened = GraphRepository(self.repository._db_path).current().workspace
+        self.assertEqual(reopened.learner_profile, profile)
+        self.assertEqual([graph.graph_id for graph in reopened.graphs], graph_ids)
 
     def test_create_graph_adds_new_subject_graph(self) -> None:
         workspace = self.repository.create_graph(

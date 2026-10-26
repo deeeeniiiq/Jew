@@ -1,6 +1,6 @@
 import type { AgentControls } from "./assistant/AgentInteraction";
 import React from "react";
-import { BookBookmark, BugBeetle, CaretDown, CaretLeft, CaretRight, ChatCircleDots, CrosshairSimple, DownloadSimple, GearSix, PencilSimple, Plus, SquaresFour, X, MapTrifold, UserCircle } from "@phosphor-icons/react";
+import { BookBookmark, BugBeetle, CaretDown, CaretLeft, CaretRight, ChatCircleDots, CrosshairSimple, DownloadSimple, GearSix, PencilSimple, Plus, SquaresFour, X, MapTrifold } from "@phosphor-icons/react";
 
 import { APP_NAME, ASSISTANT_MIN_WIDTH, type GraphChatState, type ThemeMode, type WorkspaceSurfacePayload } from "../lib/appContracts";
 import { API_BASE } from "../lib/api";
@@ -122,7 +122,6 @@ type WorkspaceNavigationProps = {
   setCreateGraphOpen: StateSetter<boolean>;
   setCreateGraphError: StateSetter<string | null>;
   openRoadmapStudio: () => void;
-  openLearnerProfile: () => void;
   mobileMenuOpen: boolean;
   setMobileMenuOpen: StateSetter<boolean>;
 };
@@ -285,7 +284,6 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
     setCreateGraphOpen,
     setCreateGraphError,
     openRoadmapStudio,
-    openLearnerProfile,
     mobileMenuOpen,
     setMobileMenuOpen,
   } = navigation;
@@ -1035,10 +1033,6 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
             <MapTrifold size={17} weight="bold" className="sidebarIcon" />
             <div className="sidebarAccountMeta"><span className="sidebarAccountTriggerName">Criar roadmap</span></div>
           </button>
-          <button className="sidebarAccountTrigger" type="button" onClick={openLearnerProfile}>
-            <UserCircle size={17} weight="bold" className="sidebarIcon" />
-            <div className="sidebarAccountMeta"><span className="sidebarAccountTriggerName">Meu perfil</span></div>
-          </button>
           <button
             className="sidebarAccountTrigger"
             onClick={openConfigurationSettings}
@@ -1271,7 +1265,7 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
                     onSelectTopic={handleSelectTopic}
                     onSelectedTopicAnchorChange={handleSelectedTopicAnchorChange}
                     graphCacheKey={`graph:${activeGraph.graph_id}`}
-                    initialZoom={0.45}
+                    initialZoom={0.95}
                     nodePositions={graphLayoutEditing ? graphLayoutDraft : activeGraphManualLayout}
                     layoutEditMode={graphLayoutEditing}
                     onNodePositionsChange={setGraphLayoutDraft}
@@ -1634,9 +1628,6 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
                 <button className="lightDockButton" onClick={openRoadmapStudio} title="Criar roadmap" aria-label="Criar roadmap" type="button">
                   <MapTrifold size={21} weight={getDockIconWeight(false)} />
                 </button>
-                <button className="lightDockButton" onClick={openLearnerProfile} title="Meu perfil" aria-label="Meu perfil" type="button">
-                  <UserCircle size={21} weight={getDockIconWeight(false)} />
-                </button>
                 <button
                   className={`lightDockButton ${lightWorkspacePanelOpen ? "lightDockButtonActive" : ""}`}
                   onClick={toggleExperimentalWorkspaceWindow}
@@ -1678,9 +1669,6 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
           <div className="lightDock lightDockHorizontal">
             <button className="lightDockButton" type="button" aria-label="Criar roadmap" title="Criar roadmap" onClick={openRoadmapStudio}>
               <MapTrifold size={21} weight="regular" />
-            </button>
-            <button className="lightDockButton" type="button" aria-label="Meu perfil" title="Meu perfil" onClick={openLearnerProfile}>
-              <UserCircle size={21} weight="regular" />
             </button>
             <button
               className={`lightDockButton ${workspaceActive ? "lightDockButtonActive" : ""}`}

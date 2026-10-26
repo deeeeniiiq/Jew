@@ -4,6 +4,9 @@ import { ASSISTANT_WIDTH_STORAGE_KEY } from "./appContracts";
 import { readStoredAssistantWidth, readStoredBoolean } from "./appStatePersistence";
 beforeEach(() => localStorage.clear());
 describe("workspace preference persistence", () => {
+  it("opens new workspaces with the roadmap visible and chat collapsed", () => {
+    expect(readStoredAssistantWidth()).toBe(0);
+  });
   it("restores valid fractional widths without truncating persisted state", () => {
     localStorage.setItem(ASSISTANT_WIDTH_STORAGE_KEY, "390.75");
     expect(readStoredAssistantWidth()).toBe(390.75);
@@ -11,7 +14,7 @@ describe("workspace preference persistence", () => {
   it("rejects partial and non-finite numeric preferences", () => {
     for (const value of ["390junk", "Infinity", "NaN", "   "]) {
       localStorage.setItem(ASSISTANT_WIDTH_STORAGE_KEY, value);
-      expect(readStoredAssistantWidth()).toBe(390);
+      expect(readStoredAssistantWidth()).toBe(0);
     }
   });
   it("retains the existing collapsed-width and upper-bound rules", () => {

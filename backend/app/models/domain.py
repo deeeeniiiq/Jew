@@ -411,6 +411,8 @@ class LearnerProfile(BaseModel):
     interests: list[str] = Field(default_factory=list, max_length=12)
     level: Literal["beginner", "intermediate", "advanced"] = "beginner"
     goal: str = Field(default="", max_length=400)
+    study_hours_per_week: int = Field(default=0, ge=0, le=80)
+    learning_preferences: list[str] = Field(default_factory=list, max_length=6)
     github: str = Field(default="", max_length=240)
     instagram: str = Field(default="", max_length=240)
     onboarding_complete: bool = False

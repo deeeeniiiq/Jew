@@ -15,6 +15,8 @@ class RoadmapGenerateRequest(BaseModel):
     profession: str = Field(default="", max_length=120)
     level: str = Field(default="beginner", pattern="^(beginner|intermediate|advanced)$")
     goal: str = Field(default="", max_length=400)
+    study_hours_per_week: int = Field(default=0, ge=0, le=80)
+    learning_preferences: list[str] = Field(default_factory=list, max_length=6)
     language: str = Field(default="pt", pattern="^(pt|en|ru|uk)$")
     model: str | None = Field(default=None, max_length=160)
 

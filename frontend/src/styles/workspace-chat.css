@@ -482,6 +482,34 @@ select.input {
   touch-action: none;
 }
 
+.graphViewportControls {
+  position: absolute;
+  z-index: 1;
+  right: 20px;
+  bottom: 20px;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid rgba(214, 195, 163, .18);
+  border-radius: 6px;
+  background: #191918;
+}
+.graphViewportControls button {
+  min-width: 34px;
+  min-height: 32px;
+  padding: 4px 9px;
+  border: 0;
+  border-radius: 3px;
+  color: #f0ebe1;
+  background: transparent;
+  font: 600 12px var(--sans);
+  cursor: pointer;
+}
+.graphViewportControls button:hover,
+.graphViewportControls button:focus-visible { color: #d9ad45; background: #30291b; outline: none; }
+:root[data-theme="light"] .graphViewportControls { background: #faf9f6; border-color: #d4ccbf; }
+:root[data-theme="light"] .graphViewportControls button { color: #2d2b28; }
+
 .graph3dSurface {
   position: absolute;
   inset: 0;

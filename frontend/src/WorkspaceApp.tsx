@@ -5,7 +5,7 @@ import { AppDialogs } from "./components/AppDialogs";
 import { DebugLogsModal } from "./components/DebugLogsModal";
 import { SettingsModal } from "./components/SettingsModal";
 import { WorkspaceShell } from "./components/WorkspaceShell";
-import { LearnerOnboarding, EMPTY_LEARNER_PROFILE } from "./components/roadmap/LearnerOnboarding";
+import { LearnerOnboarding, EMPTY_LEARNER_PROFILE, needsLearnerOnboarding } from "./components/roadmap/LearnerOnboarding";
 import { RoadmapStudio } from "./components/roadmap/RoadmapStudio";
 import { StudyReportHistory } from "./components/study/StudyReportHistory";
 import { ClewLoader } from "./components/ClewLoader";
@@ -363,7 +363,7 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
         setData(payload);
         const profile = payload.workspace.learner_profile ?? EMPTY_LEARNER_PROFILE;
         setLearnerProfile(profile);
-        setOnboardingOpen(!profile.onboarding_complete);
+        setOnboardingOpen(needsLearnerOnboarding(profile, payload.snapshot.id));
         const fallbackGraphId = payload.workspace.active_graph_id ?? payload.workspace.graphs[0]?.graph_id ?? null;
         setActiveGraphId((previous) => previous ?? fallbackGraphId);
       } catch (loadError) {
@@ -745,6 +745,7 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
   }
 
   async function saveLearnerProfile(profile: LearnerProfile): Promise<void> {
+    const launchStudio = needsLearnerOnboarding(learnerProfile, data?.snapshot.id ?? 0);
     const response = await apiFetch(`${API_BASE}/api/v1/learner/profile`, {
       method: "PUT", headers: { "Content-Type": "application/json" },
       body: JSON.stringify(profile),
@@ -754,7 +755,7 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
     setData(payload);
     setLearnerProfile(payload.workspace.learner_profile ?? profile);
     setOnboardingOpen(false);
-    setRoadmapStudioOpen(true);
+    if (launchStudio) setRoadmapStudioOpen(true);
   }
 
   async function openConfirmedRoadmap(payload: WorkspaceEnvelope): Promise<void> {
@@ -1424,7 +1425,6 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
           setCreateGraphOpen,
           setCreateGraphError,
           openRoadmapStudio: () => { setOnboardingOpen(false); setRoadmapStudioOpen(true); },
-          openLearnerProfile: () => { setRoadmapStudioOpen(false); setOnboardingOpen(true); },
           mobileMenuOpen,
           setMobileMenuOpen,
         }}
@@ -1565,14 +1565,14 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
       {(onboardingOpen || roadmapStudioOpen) && (
         <div className="jewLearningOverlay" role="presentation">
           <div className="jewLearningPanel" role="dialog" aria-modal="true" aria-label={onboardingOpen ? "Seu perfil de aprendizagem" : "Criar roadmap"}>
-            <button className="jewLearningClose" type="button" aria-label="Voltar ao JEW"
-              onClick={() => { setOnboardingOpen(false); setRoadmapStudioOpen(false); }}>✕</button>
+            {(!onboardingOpen || !needsLearnerOnboarding(learnerProfile, data?.snapshot.id ?? 0)) &&
+              <button className="jewLearningClose" type="button" aria-label="Voltar ao JEW"
+                onClick={() => { setOnboardingOpen(false); setRoadmapStudioOpen(false); }}>✕</button>}
             {onboardingOpen ? (
               <LearnerOnboarding key={`${learnerProfile.profession}:${learnerProfile.onboarding_complete}`} profile={learnerProfile}
-                onSave={saveLearnerProfile} onSkip={() => { setOnboardingOpen(false); setRoadmapStudioOpen(true); }} />
+                onSave={saveLearnerProfile} onClose={!needsLearnerOnboarding(learnerProfile, data?.snapshot.id ?? 0) ? () => setOnboardingOpen(false) : undefined} />
             ) : (
               <RoadmapStudio profile={learnerProfile} onClose={() => setRoadmapStudioOpen(false)}
-                onEditProfile={() => { setRoadmapStudioOpen(false); setOnboardingOpen(true); }}
                 onCreated={openConfirmedRoadmap} />
             )}
           </div>
@@ -1594,6 +1594,7 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
         isSettingsOpen={isSettingsOpen}
         copy={copy}
         setSettingsOpen={setSettingsOpen}
+        onEditLearnerProfile={() => { setSettingsOpen(false); setRoadmapStudioOpen(false); setOnboardingOpen(true); }}
         currentConfig={currentConfig}
         drafts={{ ...settingsState.drafts, themeMode: themeModeDraft }}
         setDrafts={{ ...settingsState.setDrafts, themeMode: setThemeModeDraft }}

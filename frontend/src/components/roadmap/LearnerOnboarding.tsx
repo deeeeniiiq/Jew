@@ -16,19 +16,26 @@ const INTERESTS = [
   "Dados", "Projetos práticos", "Design", "Redes e infraestrutura",
   "Empreendedorismo", "Idiomas", "Saúde", "Sustentabilidade",
 ];
+const LEARNING_PREFERENCES = ["Exemplos práticos", "Leitura guiada", "Vídeos", "Exercícios", "Projetos", "Revisões curtas"];
 
 export const EMPTY_LEARNER_PROFILE: LearnerProfile = {
   display_name: "", profession: "", interests: [], level: "beginner",
-  goal: "", github: "", instagram: "", onboarding_complete: false,
+  goal: "", study_hours_per_week: 0, learning_preferences: [],
+  github: "", instagram: "", onboarding_complete: false,
 };
+
+// The original workspace starts with a demo graph. Snapshot 1 still represents a new profile.
+export function needsLearnerOnboarding(profile: LearnerProfile, snapshotId: number): boolean {
+  return !profile.onboarding_complete && snapshotId === 1;
+}
 
 type Props = {
   profile: LearnerProfile;
   onSave: (profile: LearnerProfile) => Promise<void>;
-  onSkip: () => void;
+  onClose?: () => void;
 };
 
-export function LearnerOnboarding({ profile, onSave, onSkip }: Props): React.JSX.Element {
+export function LearnerOnboarding({ profile, onSave, onClose }: Props): React.JSX.Element {
   const [draft, setDraft] = useState<LearnerProfile>(profile);
   const [customProfession, setCustomProfession] = useState(
     profile.profession && !PROFESSIONS.includes(profile.profession) ? profile.profession : "",
@@ -90,6 +97,23 @@ export function LearnerOnboarding({ profile, onSave, onSkip }: Props): React.JSX
           <label className="jewField jewFullField">Qual é seu objetivo?
             <textarea rows={2} maxLength={400} value={draft.goal} onChange={(event) => setDraft((value) => ({ ...value, goal: event.target.value }))} placeholder="Ex.: quero trabalhar com IA, criar um projeto ou me preparar para uma prova" />
           </label>
+          <label className="jewField">Horas de estudo por semana (estimativa)
+            <input type="number" min={0} max={80} step={1} value={draft.study_hours_per_week ?? 0}
+              onChange={(event) => setDraft((value) => ({ ...value, study_hours_per_week: Number(event.target.value) }))} />
+          </label>
+          <div className="jewField jewFullField"><span>Como você prefere aprender?</span>
+            <div className="jewInterestChips" role="group" aria-label="Preferências de aprendizagem">
+              {LEARNING_PREFERENCES.map((preference) => {
+                const selected = (draft.learning_preferences ?? []).includes(preference);
+                return <button key={preference} type="button" aria-pressed={selected} className={selected ? "isSelected" : ""}
+                  onClick={() => setDraft((value) => ({ ...value, learning_preferences: selected
+                    ? (value.learning_preferences ?? []).filter((item) => item !== preference)
+                    : [...(value.learning_preferences ?? []), preference] }))}>
+                  {selected ? "✓ " : "+ "}{preference}
+                </button>;
+              })}
+            </div>
+          </div>
           <div className="jewFullField jewField"><span>Assuntos de interesse (até 12)</span>
             <div className="jewInterestChips" role="group" aria-label="Interesses">
               {INTERESTS.map((interest) => {
@@ -109,8 +133,8 @@ export function LearnerOnboarding({ profile, onSave, onSkip }: Props): React.JSX
           </label>
         </div>
         {error && <p className="jewInlineError" role="alert">{error}</p>}
-        <div className="jewFormActions"><button type="button" className="jewTextButton" onClick={onSkip}>Agora não</button>
-          <button type="submit" className="jewPrimaryButton" disabled={pending}>{pending ? "Salvando perfil…" : "Continuar para meus roadmaps →"}</button>
+        <div className="jewFormActions">{onClose && <button type="button" className="jewTextButton" onClick={onClose}>Cancelar</button>}
+          <button type="submit" className="jewPrimaryButton" disabled={pending}>{pending ? "Salvando perfil…" : "Salvar e continuar →"}</button>
         </div>
       </form>
     </section>

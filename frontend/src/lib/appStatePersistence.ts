@@ -56,7 +56,7 @@ export function readStoredBoolean(key: string, fallback: boolean): boolean {
 export function readStoredAssistantWidth(): number {
   try {
     const saved = localStorage.getItem(ASSISTANT_WIDTH_STORAGE_KEY);
-    if (!saved?.trim()) return 390;
+    if (!saved?.trim()) return 0;
     const width = Number(saved);
     if (Number.isFinite(width)) {
       const normalized = Math.max(0, Math.min(ASSISTANT_MAX_WIDTH, width));
@@ -65,7 +65,7 @@ export function readStoredAssistantWidth(): number {
   } catch {
     // Ignore invalid persisted width values.
   }
-  return 390;
+  return 0;
 }
 
 export function readStoredViewportCenteredZoom(): boolean {

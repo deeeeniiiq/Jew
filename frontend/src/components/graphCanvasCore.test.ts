@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildAnchorMap, buildZoneContour, cardBounds, cardEdgeAnchor, cardOverlap, cardSize, cardTitleLines, edgeRenderMotion, idleRenderOffset, nextIdleMotionState, pointInCard, zoneIdByTopicId } from "./graphCanvasCore";
+import { buildAnchorMap, buildZoneContour, cardBounds, cardEdgeAnchor, cardOverlap, cardSize, cardTitleLines, edgeRenderMotion, fitCardViewport, idleRenderOffset, nextIdleMotionState, pointInCard, zoneIdByTopicId } from "./graphCanvasCore";
 import type { Zone } from "../lib/types";
 
 describe("roadmap cards", () => {
@@ -29,6 +29,16 @@ describe("roadmap cards", () => {
     expect(cardOverlap({ x: 0, y: 0 }, size, { x: 190, y: 0 }, size)).toBeNull();
     expect(cardOverlap({ x: 0, y: 0 }, size, { x: 190, y: 0 }, size, 20)).toEqual({ x: 10, y: 68 });
     expect(cardOverlap({ x: 0, y: 0 }, size, { x: 0, y: 0 }, size)?.x).toBe(180);
+  });
+
+  it("fits the whole set of card bounds and centers it in the viewport", () => {
+    const view = fitCardViewport([
+      { center: { x: 100, y: 100 }, size: { width: 200, height: 50 } },
+      { center: { x: 100, y: 900 }, size: { width: 200, height: 50 } },
+    ], { width: 1000, height: 800 }, 100);
+    expect(view?.zoom).toBeCloseTo(600 / 850);
+    expect(view?.panOffset).toEqual({ x: 400, y: -100 });
+    expect(fitCardViewport([], { width: 1000, height: 800 })).toBeNull();
   });
 });
 

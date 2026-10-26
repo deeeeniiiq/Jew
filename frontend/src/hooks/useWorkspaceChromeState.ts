@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 
 import {
   APP_FAVICON_DARK_SRC,
   APP_FAVICON_LIGHT_SRC,
-  ASSISTANT_MIN_WIDTH,
   ASSISTANT_WIDTH_STORAGE_KEY,
   type ThemeMode,
 } from "../lib/appContracts";
@@ -50,7 +49,7 @@ export function useWorkspaceChromeState(): {
   const [assistantWidth, setAssistantWidth] = useState<number>(readStoredAssistantWidth);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [viewportWidth, setViewportWidth] = useState<number>(() => (typeof window === "undefined" ? 1440 : window.innerWidth));
-  const [leftSidebarOpen, setLeftSidebarOpen] = useState(() => readStoredBoolean(LEFT_SIDEBAR_OPEN_STORAGE_KEY, true));
+  const [leftSidebarOpen, setLeftSidebarOpen] = useState(() => readStoredBoolean(LEFT_SIDEBAR_OPEN_STORAGE_KEY, false));
   const [leftSidebarClosing, setLeftSidebarClosing] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isSettingsOpen, setSettingsOpen] = useState(() => readStoredBoolean(SETTINGS_OPEN_STORAGE_KEY, false));
@@ -59,7 +58,6 @@ export function useWorkspaceChromeState(): {
   const [straightEdgeLinesEnabled, setStraightEdgeLinesEnabled] = useState<boolean>(readStoredStraightEdgeLines);
   const initialThemeMode = useMemo<ThemeMode>(readInitialThemeMode, []);
   const [themeModeDraft, setThemeModeDraft] = useState<ThemeMode>(initialThemeMode);
-  const wasMobileViewportRef = useRef(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -76,15 +74,6 @@ export function useWorkspaceChromeState(): {
       window.removeEventListener("resize", sync);
     };
   }, []);
-
-  useEffect(() => {
-    if (wasMobileViewportRef.current && !isMobileViewport) {
-      setLeftSidebarOpen(true);
-      setLeftSidebarClosing(false);
-      setAssistantWidth((current) => (current < ASSISTANT_MIN_WIDTH ? 390 : current));
-    }
-    wasMobileViewportRef.current = isMobileViewport;
-  }, [isMobileViewport]);
 
   usePersistedNumber(ASSISTANT_WIDTH_STORAGE_KEY, assistantWidth);
   usePersistedBoolean(LEFT_SIDEBAR_OPEN_STORAGE_KEY, leftSidebarOpen);

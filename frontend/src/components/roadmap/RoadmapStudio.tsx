@@ -7,7 +7,6 @@ import { RoadmapPreview } from "./RoadmapPreview";
 type Props = {
   profile: LearnerProfile;
   onClose: () => void;
-  onEditProfile: () => void;
   onCreated: (workspace: WorkspaceEnvelope) => Promise<void>;
 };
 
@@ -41,7 +40,7 @@ function socialUrl(value: string, provider: "github" | "instagram"): string | nu
   } catch { return null; }
 }
 
-export function RoadmapStudio({ profile, onClose, onEditProfile, onCreated }: Props): React.JSX.Element {
+export function RoadmapStudio({ profile, onClose, onCreated }: Props): React.JSX.Element {
   const [topic, setTopic] = useState("");
   const [goal, setGoal] = useState(profile.goal);
   const [language, setLanguage] = useState<RoadmapLanguage>("pt");
@@ -65,6 +64,8 @@ export function RoadmapStudio({ profile, onClose, onEditProfile, onCreated }: Pr
     const request: RoadmapGenerateRequest = {
       topic: topic.trim(), profession: profile.profession, level: profile.level,
       goal: goal.trim(), language,
+      study_hours_per_week: profile.study_hours_per_week ?? 0,
+      learning_preferences: profile.learning_preferences ?? [],
     };
     try {
       const response = await apiFetch(`${API_BASE}/api/v1/roadmaps/preview`, {
@@ -105,7 +106,7 @@ export function RoadmapStudio({ profile, onClose, onEditProfile, onCreated }: Pr
         <div className="jewStudioHeroText"><span className="jewEyebrow">JEW / ROADMAP STUDIO</span>
           <h1 id="jew-studio-title">Um objetivo. <em>Um caminho claro.</em></h1>
           <p>Escolha qualquer assunto. A IA local organiza etapas, pré-requisitos e uma trilha que você poderá transformar em aulas, exercícios e quizzes.</p>
-          <div className="jewStudioBadges"><span>◈ Ollama local</span><span>↗ Fontes externas identificadas</span><span>◇ Progresso salvo</span></div>
+          <div className="jewStudioBadges"><span>◈ IA local quando selecionada</span><span>↗ Pesquisa de fontes identificadas</span><span>◇ Progresso salvo</span></div>
         </div>
         <aside className="jewStudioIdentity">
           <span className="jewEyebrow">SEU PERFIL</span><strong>{profile.display_name || "Explorador(a)"}</strong>
@@ -114,7 +115,6 @@ export function RoadmapStudio({ profile, onClose, onEditProfile, onCreated }: Pr
           <div className="jewIdentityLinks">
             {githubUrl && <a href={githubUrl} rel="noopener noreferrer" target="_blank">↗ GitHub</a>}
             {instagramUrl && <a href={instagramUrl} rel="noopener noreferrer" target="_blank">↗ Instagram</a>}
-            <button type="button" onClick={onEditProfile}>Editar perfil ↗</button>
           </div>
         </aside>
       </div>
