@@ -26,6 +26,7 @@ export type Topic = {
   title: string;
   slug: string;
   description: string;
+  note_markdown?: string;
   difficulty: number;
   estimated_minutes: number;
   level: number;

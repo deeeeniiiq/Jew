@@ -26,7 +26,7 @@ from app.api.route_helpers import (
     workspace_config_payload as _workspace_config_payload,
 )
 from app.core.config import Settings, get_settings
-from app.models.api import GraphExportRequest, GraphImportRequest, GraphLayoutPositionRequest, LessonGenerateRequest, RenameGraphRequest, TopicArtifactInput, TopicResourceInput, UpdateGraphLayoutRequest
+from app.models.api import GraphExportRequest, GraphImportRequest, GraphLayoutPositionRequest, LessonGenerateRequest, RenameGraphRequest, TopicArtifactInput, TopicNoteInput, TopicResourceInput, UpdateGraphLayoutRequest
 from app.models.domain import Artifact, CreateGraphRequest, GraphProposalEnvelope, LearnerProfile, QuizReportRecord, QuizStartRequest, QuizStartResponse, QuizStudyDraft, QuizSubmitRequest, QuizSubmitResponse, ResourceLink, UpdateWorkspaceConfigRequest
 from app.services.roadmap_studio import RoadmapGenerateRequest
 from app.services.adaptive_learning import AdaptiveLearningService
@@ -299,6 +299,20 @@ def append_topic_artifact(
         status_code = 404 if "not found" in message else 400
         raise HTTPException(status_code=status_code, detail=message) from exc
     return _workspace_config_payload(workspace, settings)
+
+
+@router.put("/api/v1/workspace/graphs/{graph_id}/topics/{topic_id}/note")
+def update_topic_note(
+    graph_id: str,
+    topic_id: str,
+    body: TopicNoteInput,
+    repository: GraphRepository = Depends(get_repository),
+) -> dict:
+    try:
+        note = repository.update_topic_note(graph_id, topic_id, body.note_markdown)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"graph_id": graph_id, "topic_id": topic_id, "note_markdown": note}
 
 
 @router.post("/api/v1/graphs/{graph_id}/topics/{topic_id}/lessons/generate")

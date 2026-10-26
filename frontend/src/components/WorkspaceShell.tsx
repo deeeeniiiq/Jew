@@ -1,6 +1,6 @@
 import type { AgentControls } from "./assistant/AgentInteraction";
 import React from "react";
-import { BookBookmark, BugBeetle, CaretDown, CaretLeft, CaretRight, ChatCircleDots, CrosshairSimple, DownloadSimple, GearSix, PencilSimple, Plus, SquaresFour, X, MapTrifold } from "@phosphor-icons/react";
+import { BookBookmark, BugBeetle, CaretDown, CaretLeft, CaretRight, ChatCircleDots, CrosshairSimple, DownloadSimple, GearSix, PencilSimple, SquaresFour, MapTrifold } from "@phosphor-icons/react";
 
 import { APP_NAME, ASSISTANT_MIN_WIDTH, type GraphChatState, type ThemeMode, type WorkspaceSurfacePayload } from "../lib/appContracts";
 import { API_BASE } from "../lib/api";
@@ -18,16 +18,14 @@ import {
   type StoredLightDesktopLayout,
 } from "../lib/floatingDesktopLayout";
 import { readErrorMessage, type apiFetch } from "../lib/apiRequest";
-import { renderDisplayText, safeExternalUrl, type ManualLayoutPositions, type PopoverPosition } from "../lib/appUiHelpers";
+import { safeExternalUrl, type ManualLayoutPositions, type PopoverPosition } from "../lib/appUiHelpers";
 import type { AppCopy } from "../lib/appCopy";
-import { formatMinutes, formatTopicState, getTopicStateTone } from "../lib/graph";
 import { useModalAccessibility } from "../lib/useModalAccessibility";
 import { GraphCanvas } from "./GraphCanvas";
-import { LearningGuidance } from "./LearningGuidance";
+import { KnowledgeWorkspace } from "./KnowledgeWorkspace";
 import type { TopicAnchorPoint } from "./GraphCanvas";
 import { AssistantModelMenuTrigger, LightChatWindow, LightWorkspaceWindow, TopicAssetModal } from "./WorkspaceShellAuxWindows";
 import { AssistantComposer } from "./assistant/AssistantComposer";
-import { AssistantMarkdown } from "./assistant/AssistantMarkdown";
 import { AssistantSessionList } from "./assistant/AssistantSessionList";
 import { AssistantThread } from "./assistant/AssistantThread";
 import { TopStatsOverlay } from "./TopStatsOverlay";
@@ -185,6 +183,7 @@ type GraphWorkspaceProps = {
 type TopicDetailsProps = {
   addTopicResource: (topicId: string, url: string) => Promise<void>;
   addTopicArtifact: (topicId: string, title: string, body: string) => Promise<void>;
+  saveTopicNote: (topicId: string, markdown: string) => Promise<void>;
   generateLesson: () => Promise<void>;
   lessonLoading: boolean;
   lessonError: string | null;
@@ -343,18 +342,14 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
   const {
     addTopicResource,
     addTopicArtifact,
+    saveTopicNote,
     generateLesson,
     lessonLoading,
     lessonError,
     lessonSuccess,
     selectedTopic,
-    selectedTopicAnchor,
     popoverPosition,
     topicPopoverRef,
-    popoverDragRef,
-    selectedZoneLabel,
-    selectedResourceLinks,
-    selectedArtifacts,
     selectedClosureStatus,
     learningPlan,
     topicTitlesById,
@@ -366,6 +361,12 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
     openQuizReportHistory,
     markTopicFinished,
   } = topicDetails;
+  const [knowledgeOpen, setKnowledgeOpen] = React.useState(false);
+  React.useEffect(() => { setKnowledgeOpen(false); }, [activeGraph?.graph_id]);
+  const selectTopicFromMap = React.useCallback((topicId: string | null, anchor: TopicAnchorPoint | null) => {
+    handleSelectTopic(topicId, anchor);
+    if (topicId && !graphLayoutEditing) setKnowledgeOpen(true);
+  }, [graphLayoutEditing, handleSelectTopic]);
   const {
     agentControls,
     assistantResizing,
@@ -698,38 +699,6 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
   const generalSession = chatSessions.find((session) => !session.topic_id) ?? null;
   const topicSessions = chatSessions.filter((session) => Boolean(session.topic_id));
   const visibleMessages = currentChatState.messages.filter((message) => !message.hidden);
-  const pathTitles = focusData.pathLayers.flat().map((entry) => entry.title);
-  const selectedTopicClosed = selectedTopic?.state === "solid" || selectedTopic?.state === "mastered";
-  const selectedLessons = selectedArtifacts.filter((artifact) => artifact.kind === "lesson");
-  const selectedOtherArtifacts = selectedArtifacts.filter((artifact) => artifact.kind !== "lesson");
-  const topicPopoverConnector = React.useMemo(() => {
-    if (graphViewMode !== "3d" || !selectedTopic || !selectedTopicAnchor || !popoverPosition || isMobileViewport) return null;
-    const width = topicPopoverRef.current?.offsetWidth ?? 380;
-    const height = topicPopoverRef.current?.offsetHeight ?? 320;
-    const left = popoverPosition.left;
-    const top = popoverPosition.top;
-    const right = left + width;
-    const bottom = top + height;
-    const anchorInsidePopover = selectedTopicAnchor.x >= left
-      && selectedTopicAnchor.x <= right
-      && selectedTopicAnchor.y >= top
-      && selectedTopicAnchor.y <= bottom;
-    if (anchorInsidePopover) return null;
-
-    const exitsLeft = selectedTopicAnchor.x < left;
-    const startX = exitsLeft ? left - 2 : right + 2;
-    const startY = top + height / 2;
-    const direction = selectedTopicAnchor.x >= startX ? 1 : -1;
-    const horizontalDistance = Math.abs(selectedTopicAnchor.x - startX);
-    const bend = Math.max(36, Math.min(150, horizontalDistance * 0.42));
-    const path = [
-      `M ${startX} ${startY}`,
-      `C ${startX + direction * bend} ${startY},`,
-      `${selectedTopicAnchor.x - direction * bend * 0.52} ${selectedTopicAnchor.y},`,
-      `${selectedTopicAnchor.x} ${selectedTopicAnchor.y}`,
-    ].join(" ");
-    return { path };
-  }, [graphViewMode, isMobileViewport, popoverPosition, selectedTopic, selectedTopicAnchor, topicPopoverRef]);
 
   React.useEffect(() => {
     if (!experimentalLightDesktop) return;
@@ -837,7 +806,7 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
       openExportGraphModal={openExportGraphModal}
       setDeleteConfirm={setDeleteConfirm}
       selectedTopicId={selectedTopicId}
-      handleSelectTopic={handleSelectTopic}
+      handleSelectTopic={selectTopicFromMap}
       closing={workspaceWindowAnim.closing}
     />
   ) : null;
@@ -1119,7 +1088,7 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
         ) : null}
 
         <TopStatsOverlay
-          visible={showMobileOverlay}
+          visible={showMobileOverlay && !knowledgeOpen}
           wrapperClassName="topOverlayStack topOverlayStackMobile"
           wrapperStyle={{
             left: "12px",
@@ -1152,7 +1121,7 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
         />
 
         <TopStatsOverlay
-          visible={showCompactDesktopOverlay}
+          visible={showCompactDesktopOverlay && !knowledgeOpen}
           wrapperClassName="topOverlayStack"
           wrapperStyle={{
             left: `${overlayLeftInset}px`,
@@ -1185,7 +1154,7 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
         />
 
         <TopStatsOverlay
-          visible={showInlineDesktopOverlay}
+          visible={showInlineDesktopOverlay && !knowledgeOpen}
           wrapperClassName="topOverlayInline"
           wrapperStyle={{
             left: `${overlayLeftInset}px`,
@@ -1221,6 +1190,10 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
           <div className="workspaceMain">
             <div className="neuroLayout">
               <div ref={graphShellRef} className="neuroGraphShell">
+                {activeGraph && activeGraph.topics.length > 0 && !knowledgeOpen ? <button className="knowledgeEntryButton" type="button" onClick={() => {
+                  if (!selectedTopic) handleSelectTopic(Array.from(focusData.rootIds)[0] || activeGraph.topics[0]?.id || null, null);
+                  setKnowledgeOpen(true);
+                }}><BookBookmark size={15} /> Espaço de estudo</button> : null}
                 {isMobileViewport && activeGraph ? (
                   <button
                     className="mobileRecenterBtn"
@@ -1245,7 +1218,7 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
                       pathNodeIds={focusData.pathNodeIds}
                       pathEdgeIds={focusData.pathEdgeIds}
                       frontierEdgeIds={focusData.frontierEdgeIds}
-                      onSelectTopic={handleSelectTopic}
+                      onSelectTopic={selectTopicFromMap}
                       onSelectedTopicAnchorChange={handleSelectedTopicAnchorChange}
                       themeMode={themeMode}
                     />
@@ -1262,7 +1235,7 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
                     pathNodeIds={focusData.pathNodeIds}
                     pathEdgeIds={focusData.pathEdgeIds}
                     frontierEdgeIds={focusData.frontierEdgeIds}
-                    onSelectTopic={handleSelectTopic}
+                    onSelectTopic={selectTopicFromMap}
                     onSelectedTopicAnchorChange={handleSelectedTopicAnchorChange}
                     graphCacheKey={`graph:${activeGraph.graph_id}`}
                     initialZoom={0.95}
@@ -1331,203 +1304,30 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
                   </div>
                 ) : null}
 
-                {topicPopoverConnector ? (
-                  <svg className="topicPopoverConnector" aria-hidden="true">
-                    <path className="topicPopoverConnectorLine" d={topicPopoverConnector.path} />
-                  </svg>
-                ) : null}
-
-                {selectedTopic && popoverPosition ? (
-                  <div
-                    ref={topicPopoverRef}
-                    className={`topicPopover topicPopover-${popoverPosition.side}`}
-                    style={{ left: `${popoverPosition.left}px`, top: `${popoverPosition.top}px` }}
-                    onPointerDown={(event) => {
-                      const target = event.target;
-                      if (target instanceof Element && target.closest("button, a, input, textarea, select")) {
-                        return;
-                      }
-                      if (!popoverPosition) return;
-                      popoverDragRef.current = {
-                        pointerX: event.clientX,
-                        pointerY: event.clientY,
-                        startX: popoverPosition.left,
-                        startY: popoverPosition.top,
-                      };
-                    }}
-                  >
-                    <div className="topicPopoverHeader">
-                      <div className="topicPopoverEyebrow">{copy.topic.eyebrow}</div>
-                      <button
-                        className="topicPopoverClose"
-                        onPointerDown={(event) => event.stopPropagation()}
-                        onClick={() => {
-                          setSelectedTopicId(null);
-                          setSelectedTopicAnchor(null);
-                        }}
-                        type="button"
-                        aria-label={copy.topic.closeTopic}
-                      >
-                        <X size={13} weight="bold" aria-hidden="true" />
-                      </button>
-                    </div>
-                    <div className="topicPopoverTitle">{selectedTopic.title}</div>
-                    <div className="topicPopoverMeta">
-                      <span className={`topicPopoverState topicPopoverState-${getTopicStateTone(selectedTopic.state)}`}>{formatTopicState(selectedTopic.state)}</span>
-                      <span className="topicPopoverMetaItem">{formatMinutes(selectedTopic.estimated_minutes, copy)}</span>
-                      {selectedZoneLabel ? <span className="topicPopoverMetaItem">{selectedZoneLabel}</span> : null}
-                    </div>
-                    <div className="topicPopoverSection">
-                      <div className="topicPopoverCopy">{renderDisplayText(selectedTopic.description || copy.topic.noDescription)}</div>
-                    </div>
-                    <div className="topicPopoverSection">
-                      <div className="topicPopoverLabel">{copy.topic.foundationPath}</div>
-                      <div className="topicPopoverPath">
-                        {(pathTitles.length > 0 ? pathTitles : [selectedTopic.title]).map((title, index, all) => (
-                          <span key={`${title}-${index}`} className={index === all.length - 1 ? "topicPopoverPathCurrent" : undefined}>{title}</span>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="topicPopoverSection">
-                      <div className="topicPopoverSectionHeader">
-                        <div className="topicPopoverLabel">{copy.topic.resources}</div>
-                        <button
-                          className="topicPopoverInlineAddButton"
-                          type="button"
-                          aria-label={copy.topic.addResource}
-                          title={copy.topic.addResource}
-                          onClick={() => openTopicAssetDialog("resource")}
-                        >
-                          <Plus size={12} weight="bold" aria-hidden="true" />
-                        </button>
-                      </div>
-                      {selectedResourceLinks.length > 0 ? (
-                        <div className="topicPopoverList">
-                          {selectedResourceLinks
-                            .map((resource) => ({ resource, safeUrl: safeExternalUrl(resource.url) }))
-                            .filter((item): item is { resource: typeof selectedResourceLinks[number]; safeUrl: string } => Boolean(item.safeUrl))
-                            .map(({ resource, safeUrl }) => (
-                              <a key={resource.id} className="topicPopoverLink" href={safeUrl} rel="noopener noreferrer nofollow" target="_blank">
-                                <span>{resource.label}</span>
-                                <span className="topicPopoverLinkKind">{resource.kind}</span>
-                              </a>
-                            ))}
-                        </div>
-                      ) : (
-                        <div className="topicPopoverEmpty">{copy.topic.noResources}</div>
-                      )}
-                    </div>
-                    <div className="topicPopoverSection">
-                      <div className="topicPopoverSectionHeader">
-                        <div className="topicPopoverLabel">{copy.topic.lessons}</div>
-                        <button className="topicPopoverLessonButton" type="button" disabled={lessonLoading}
-                          onClick={() => void generateLesson()}>
-                          <BookBookmark size={14} aria-hidden="true" />
-                          {lessonLoading ? copy.topic.generatingLesson : copy.topic.generateLesson}
-                        </button>
-                      </div>
-                      {lessonError ? <div role="alert" className="topicPopoverNotice topicPopoverNoticeBad">{lessonError}</div> : null}
-                      {lessonSuccess ? <div role="status" className="topicPopoverNotice">{lessonSuccess}</div> : null}
-                      {selectedLessons.length ? (
-                        <div className="topicPopoverLessonList">
-                          {[...selectedLessons].reverse().map((lesson, index) => (
-                            <details key={lesson.id} className="topicPopoverLesson">
-                              <summary>
-                                <span className="topicPopoverLessonTitle">{lesson.title}</span>
-                                <span className="topicPopoverArtifactKind">{copy.topic.lessonVersion(selectedLessons.length - index)}</span>
-                              </summary>
-                              <div className="topicPopoverLessonBody"><AssistantMarkdown content={lesson.body} /></div>
-                            </details>
-                          ))}
-                        </div>
-                      ) : <div className="topicPopoverEmpty">{copy.topic.noLessons}</div>}
-                    </div>
-                    <div className="topicPopoverSection">
-                      <div className="topicPopoverSectionHeader">
-                        <div className="topicPopoverLabel">{copy.topic.artifacts}</div>
-                        <button
-                          className="topicPopoverInlineAddButton"
-                          type="button"
-                          aria-label={copy.topic.addArtifact}
-                          title={copy.topic.addArtifact}
-                          onClick={() => openTopicAssetDialog("artifact")}
-                        >
-                          <Plus size={12} weight="bold" aria-hidden="true" />
-                        </button>
-                      </div>
-                      {selectedOtherArtifacts.length > 0 ? (
-                        <div className="topicPopoverList">
-                          {selectedOtherArtifacts.map((artifact) => (
-                            <div key={artifact.id} className="topicPopoverArtifact">
-                              <div className="topicPopoverArtifactTitle">
-                                <span>{artifact.title}</span>
-                                <span className="topicPopoverArtifactKind">{artifact.kind}</span>
-                              </div>
-                              <div className="topicPopoverArtifactBody">{renderDisplayText(artifact.body || copy.topic.noArtifactBody)}</div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="topicPopoverEmpty">{copy.topic.noArtifacts}</div>
-                      )}
-                    </div>
-                    {selectedClosureStatus ? (
-                      <div className="topicPopoverSection topicPopoverClosure">
-                        <div className="topicPopoverLabel">{copy.topic.closure}</div>
-                        {selectedClosureStatus.latest_attempt ? (
-                          <div className="topicPopoverMeta">
-                            <span className="topicPopoverMetaItem">
-                              {selectedClosureStatus.latest_attempt.source === "manual" || selectedClosureStatus.latest_attempt.id.startsWith("manual-")
-                                ? copy.closure.completedManually
-                                : copy.closure.latestQuiz(selectedClosureStatus.latest_attempt.score * 100)}
-                            </span>
-                            {selectedClosureStatus.latest_attempt.source === "manual" || selectedClosureStatus.latest_attempt.id.startsWith("manual-") ? null : (
-                              <span className={`topicPopoverState topicPopoverState-${selectedClosureStatus.latest_attempt.passed ? "good" : "bad"}`}>
-                                {selectedClosureStatus.latest_attempt.passed ? copy.closure.passed : copy.closure.failed}
-                              </span>
-                            )}
-                            {selectedClosureStatus.latest_attempt.source !== "manual" && !selectedClosureStatus.latest_attempt.id.startsWith("manual-") && !selectedClosureStatus.latest_attempt.passed && selectedClosureStatus.latest_attempt.fail_count > 0 ? (
-                              <span className="topicPopoverMetaItem">{copy.closure.failedCount(selectedClosureStatus.latest_attempt.fail_count)}</span>
-                            ) : null}
-                          </div>
-                        ) : null}
-                        {!closureTestsEnabled ? null : selectedClosureStatus.blocked_prerequisite_ids.length === 0 ? (
-                          <div className="topicPopoverCopy">{copy.topic.allClosed}</div>
-                        ) : (
-                          <div className="topicPopoverCopy">
-                            {copy.closure.blockedBy}{" "}
-                            {selectedClosureStatus.blocked_prerequisite_ids
-                              .map((topicId) => topicTitlesById.get(topicId) ?? topicId)
-                              .join(" · ")}
-                          </div>
-                        )}
-                        {quizError ? <div className="topicPopoverNotice topicPopoverNoticeBad">{quizError}</div> : null}
-                        {quizSuccess ? <div className="topicPopoverNotice">{quizSuccess}</div> : null}
-                        {!(selectedTopicClosed && !closureTestsEnabled) ? (
-                          <button
-                            className="topicPopoverPrimary"
-                            disabled={quizLoading || (closureTestsEnabled && !selectedClosureStatus.can_award_completion)}
-                            onClick={() => void (closureTestsEnabled ? startQuiz() : markTopicFinished())}
-                            type="button"
-                            title={closureTestsEnabled && !selectedClosureStatus.can_award_completion ? copy.closure.closePrerequisitesFirst : undefined}
-                          >
-                            {quizLoading
-                              ? (closureTestsEnabled ? copy.closure.generatingQuiz : copy.closure.markingAsFinished)
-                              : closureTestsEnabled && !selectedClosureStatus.can_award_completion
-                                ? copy.closure.closePrerequisitesFirst
-                                : (closureTestsEnabled ? copy.closure.startClosureQuiz : copy.closure.markAsFinished)}
-                          </button>
-                        ) : null}
-                      </div>
-                    ) : null}
-                    <div className="topicPopoverSection topicPopoverHistory">
-                      <button className="topicPopoverHistoryButton" type="button" onClick={openQuizReportHistory}>
-                        Ver relatórios anteriores
-                      </button>
-                    </div>
-                    <LearningGuidance plan={learningPlan} topicId={selectedTopic.id} titles={topicTitlesById} copy={copy} />
-                  </div>
-                ) : null}
+                {knowledgeOpen && activeGraph && selectedTopic ? <KnowledgeWorkspace
+                  graph={activeGraph}
+                  topic={selectedTopic}
+                  onSelectTopic={(id) => handleSelectTopic(id, null)}
+                  onClose={() => setKnowledgeOpen(false)}
+                  onSaveNote={saveTopicNote}
+                  onAddResource={() => openTopicAssetDialog("resource")}
+                  onAddArtifact={() => openTopicAssetDialog("artifact")}
+                  onGenerateLesson={generateLesson}
+                  lessonLoading={lessonLoading}
+                  lessonError={lessonError}
+                  lessonSuccess={lessonSuccess}
+                  onStartQuiz={startQuiz}
+                  onMarkFinished={markTopicFinished}
+                  onOpenQuizHistory={openQuizReportHistory}
+                  canComplete={closureTestsEnabled ? Boolean(selectedClosureStatus?.can_award_completion) : selectedTopic.state !== "solid" && selectedTopic.state !== "mastered"}
+                  completionEnabled={closureTestsEnabled}
+                  quizLoading={quizLoading}
+                  quizError={quizError}
+                  quizSuccess={quizSuccess}
+                  learningPlan={learningPlan}
+                  topicTitlesById={topicTitlesById}
+                  copy={copy}
+                /> : null}
               </div>
             </div>
           </div>

@@ -1,0 +1,91 @@
+.knowledgeWorkspace {
+  position: absolute;
+  inset: 0;
+  z-index: 15;
+  display: flex;
+  min-width: 0;
+  color: #e9e7e2;
+  background: #0b0b0b;
+  font-family: Inter, "IBM Plex Sans", system-ui, sans-serif;
+  font-size: 13px;
+}
+.knowledgeEntryButton { position: absolute; z-index: 3; top: 16px; left: 16px; display: flex; align-items: center; gap: 8px; padding: 9px 12px; color: #e8e1d2; background: #171716; border: 1px solid #5d5239; border-radius: 3px; font: 600 12px Inter, system-ui, sans-serif; cursor: pointer; box-shadow: 0 4px 16px #0007; }
+.knowledgeEntryButton:hover { background: #29251d; border-color: #d9ad45; }
+.knowledgeEntryButton:focus-visible { outline: 2px solid #d9ad45; }
+.knowledgeWorkspace button, .knowledgeWorkspace select { font: inherit; cursor: pointer; }
+.knowledgeWorkspace button:focus-visible, .knowledgeWorkspace select:focus-visible,
+.knowledgeWorkspace input:focus-visible, .knowledgeEditor:focus-visible { outline: 2px solid #d9ad45; outline-offset: -2px; }
+.knowledgeRail { width: 42px; flex: 0 0 42px; border-right: 1px solid #292929; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 11px 0; background: #0d0d0d; }
+.knowledgeRail button, .knowledgeTabbar button, .knowledgePaneActions button { border: 0; background: transparent; color: #999; padding: 7px; border-radius: 3px; }
+.knowledgeRail button:hover, .knowledgeTabbar button:hover, .knowledgePaneActions button:hover { background: #252525; color: #f0ebe1; }
+.knowledgeTree { width: clamp(190px, 18vw, 290px); flex: 0 0 clamp(190px, 18vw, 290px); min-height: 0; display: flex; flex-direction: column; border-right: 1px solid #303030; background: #111; }
+.knowledgeTreeHead { display: flex; justify-content: space-between; align-items: center; padding: 17px 16px 10px; color: #a8a49c; font-size: 10px; letter-spacing: .12em; font-weight: 700; }
+.knowledgeTreeHead button, .knowledgeWorkspaceBar button { background: none; border: 0; color: #d9ad45; font-size: 11px; }
+.knowledgeTreeTitle { font-size: 16px; font-weight: 650; padding: 0 16px 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.knowledgeSearch { margin: 0 12px 13px; height: 32px; display: flex; align-items: center; gap: 7px; padding: 0 9px; color: #818181; background: #1b1b1b; border: 1px solid #303030; border-radius: 3px; }
+.knowledgeSearch input { width: 100%; border: 0; outline: 0; background: transparent; color: #eee; font: inherit; }
+.knowledgeTreeList { overflow: auto; flex: 1; padding: 0 7px; scrollbar-color: #404040 transparent; }
+.knowledgeTreeList button { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 31px; padding: 5px 9px; text-align: left; color: #bdbab4; background: transparent; border: 0; border-radius: 3px; white-space: normal; }
+.knowledgeTreeList button:hover { background: #202020; color: #fff; }
+.knowledgeTreeList button.active { background: #292929; color: #f1eee8; }
+.knowledgeTreeList p { color: #777; padding: 6px 12px; }
+.knowledgeTreeDot { width: 5px; height: 5px; flex: 0 0 5px; border-radius: 50%; background: #686868; }
+.knowledgeTreeDot[data-state="mastered"], .knowledgeTreeDot[data-state="solid"] { background: #86aa86; }
+.knowledgeTreeDot[data-state="learning"] { background: #d9ad45; }
+.knowledgeTreeFoot { border-top: 1px solid #2b2b2b; color: #777; padding: 12px 16px; font-size: 11px; }
+.knowledgeEditors { min-width: 0; min-height: 0; flex: 1; display: flex; flex-direction: column; }
+.knowledgeWorkspaceBar { height: 39px; flex: 0 0 39px; display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 0 14px; border-bottom: 1px solid #292929; background: #0e0e0e; color: #a6a29a; white-space: nowrap; overflow: hidden; }
+.knowledgeWorkspaceBar > span { overflow: hidden; text-overflow: ellipsis; }
+.knowledgeWorkspaceBar > div { display: flex; align-items: center; gap: 13px; }
+.knowledgeBreadcrumbSep { color: #565656; padding: 0 6px; }
+.knowledgeSecondSelect { color: #999; font-size: 11px; }
+.knowledgeSecondSelect select { max-width: 125px; border: 0; background: #202020; color: #eee; margin-left: 7px; padding: 4px; border-radius: 2px; }
+.knowledgePaneGrid { flex: 1; display: grid; grid-template-columns: minmax(0,1fr); min-height: 0; }
+.knowledgePaneGridSplit { grid-template-columns: repeat(2,minmax(0,1fr)); }
+.knowledgePane { min-width: 0; min-height: 0; display: flex; flex-direction: column; border-right: 1px solid #303030; }
+.knowledgeTabbar { height: 34px; flex: 0 0 34px; display: flex; justify-content: space-between; align-items: stretch; border-bottom: 1px solid #303030; background: #101010; }
+.knowledgeTab { min-width: 0; max-width: 85%; display: flex; align-items: center; gap: 8px; padding: 0 13px; border-right: 1px solid #303030; border-bottom: 1px solid #d9ad45; color: #e4e0d8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.knowledgePaneToolbar { height: 35px; flex: 0 0 35px; padding: 0 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #898989; font-size: 11px; white-space: nowrap; }
+.knowledgePaneToolbar > span:first-child { overflow: hidden; text-overflow: ellipsis; }
+.knowledgePaneActions { display: flex; align-items: center; gap: 6px; }
+.knowledgePaneActions button { padding: 4px 6px; }
+.knowledgeError { color: #e19a8d; }
+.knowledgeDocument { overflow: auto; flex: 1; padding: 36px clamp(22px,5vw,76px) 80px; scrollbar-color: #3d3d3d transparent; }
+.knowledgeKicker, .knowledgeSectionLabel { color: #d9ad45; font-size: 10px; font-weight: 700; letter-spacing: .11em; text-transform: uppercase; }
+.knowledgeDocument h1 { font-size: clamp(23px,2.2vw,31px); line-height: 1.22; margin: 13px 0 22px; color: #f0ebe1; font-weight: 660; letter-spacing: -.02em; }
+.knowledgeProperties { border-top: 1px solid #353535; border-bottom: 1px solid #353535; padding: 10px 0; margin-bottom: 31px; }
+.knowledgeProperties > div { display: grid; grid-template-columns: 105px minmax(0,1fr); gap: 12px; padding: 6px 0; line-height: 1.45; }
+.knowledgeProperties span { color: #898989; }
+.knowledgeProperties strong { color: #ccc8c0; font-weight: 450; }
+.knowledgeSectionLabel { margin-bottom: 13px; }
+.knowledgeEditor { display: block; width: 100%; min-height: 270px; resize: vertical; box-sizing: border-box; border: 1px solid transparent; background: transparent; color: #e9e6df; padding: 0; outline: 0; font: 14px/1.8 "IBM Plex Mono", Consolas, monospace; }
+.knowledgeEditor::placeholder { color: #64625f; }
+.knowledgePreview { min-height: 270px; font-size: 14px; line-height: 1.7; }
+.knowledgePreview a { color: #d9ad45; }
+.knowledgePreview p { color: #a6a29a; }
+.knowledgeReferences { border-top: 1px solid #353535; margin-top: 30px; padding-top: 20px; display: grid; gap: 9px; }
+.knowledgeReferences h2 { font-size: 13px; color: #dad5ca; margin: 0 0 4px; }
+.knowledgeReferences a { color: #c6a765; text-decoration: none; overflow-wrap: anywhere; }
+.knowledgeReferences a:hover { text-decoration: underline; }
+.knowledgeMaterials { border-top: 1px solid #353535; margin-top: 30px; padding-top: 20px; }
+.knowledgeMaterials h2 { font-size: 13px; color: #dad5ca; margin: 0 0 12px; }
+.knowledgeMaterials details { border-bottom: 1px solid #292929; padding: 9px 0; }
+.knowledgeMaterials summary { cursor: pointer; color: #d6c3a3; }
+.knowledgeMaterials small { margin-left: 8px; color: #888; font-size: 10px; }
+.knowledgeMaterialBody { padding: 10px 2px; color: #d4d0c7; line-height: 1.7; overflow-wrap: anywhere; }
+.knowledgeInspector { width: clamp(185px,18vw,285px); flex: 0 0 clamp(185px,18vw,285px); min-height: 0; display: flex; flex-direction: column; border-left: 1px solid #303030; background: #101010; overflow: auto; }
+.knowledgeInspectorHeader { padding: 15px 17px; border-bottom: 1px solid #2b2b2b; color: #a6a29a; font-weight: 700; font-size: 10px; letter-spacing: .1em; }
+.knowledgeInspectorSection { padding: 16px 17px; border-bottom: 1px solid #292929; }
+.knowledgeInspectorSection h2 { display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; color: #ddd; margin: 0 0 10px; }
+.knowledgeInspectorSection h2 span { color: #818181; font-weight: 400; }
+.knowledgeInspectorSection p { color: #858585; font-size: 11px; line-height: 1.5; margin: 0; }
+.knowledgeInspectorSection button { display: block; width: 100%; padding: 5px 0; background: none; border: 0; color: #aea9a0; text-align: left; font-size: 11px; }
+.knowledgeInspectorSection button:hover { color: #d9ad45; }
+.knowledgeActions button { border: 1px solid #363430; border-radius: 3px; padding: 7px 9px; margin: 5px 0; background: #1b1b1a; }
+.knowledgeActions button:hover:not(:disabled) { border-color: #877044; }
+.knowledgeActions button:disabled { opacity: .5; cursor: not-allowed; }
+.knowledgeActions .knowledgeError { color: #e19a8d; }
+.knowledgeInspectorGraph { margin-top: auto; min-height: 200px; border-top: 1px solid #303030; padding: 15px; color: #919191; font-size: 10px; letter-spacing: .08em; }
+.knowledgeInspectorGraph svg { display: block; width: 100%; height: 170px; }
+@media (max-width: 1100px) { .knowledgeInspector { position: absolute; z-index: 4; top: 0; right: 0; bottom: 0; width: min(290px, 78vw); flex-basis: auto; box-shadow: -14px 0 32px #0009; } }
+@media (max-width: 730px) { .knowledgeTree { display: none; } .knowledgePaneGridSplit { grid-template-columns: minmax(0,1fr); overflow: auto; } .knowledgePaneGridSplit .knowledgePane { min-height: 450px; } .knowledgeWorkspaceBar { padding: 0 7px; } .knowledgeSecondSelect { display: none; } .knowledgeDocument { padding: 25px 20px 50px; } }

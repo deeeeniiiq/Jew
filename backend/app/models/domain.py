@@ -299,6 +299,7 @@ class Topic(BaseModel):
     title: str
     slug: str
     description: str = ""
+    note_markdown: str = Field(default="", max_length=200000, exclude_if=lambda value: value == "")
     difficulty: float = 0.0
     estimated_minutes: int = 0
     level: int = 0

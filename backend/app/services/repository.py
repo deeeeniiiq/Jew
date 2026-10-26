@@ -986,6 +986,25 @@ class GraphRepository:
             )
         return self.snapshot(snapshot_id)
 
+    def update_topic_note(self, graph_id: str, topic_id: str, note_markdown: str) -> str:
+        current = self.current()
+        workspace = WorkspaceDocument.model_validate(deepcopy(current.workspace.model_dump()))
+        graph = next((item for item in workspace.graphs if item.graph_id == graph_id), None)
+        if graph is None:
+            raise ValueError(f"graph {graph_id} not found")
+        topic = next((item for item in graph.topics if item.id == topic_id), None)
+        if topic is None:
+            raise ValueError(f"topic {topic_id} not found")
+        if topic.note_markdown == note_markdown:
+            return note_markdown
+        topic.note_markdown = note_markdown
+        with self._connect() as conn:
+            self._insert_snapshot(
+                conn, workspace, source="topic.note", reason=f"edit note for {topic.title}",
+                parent_snapshot_id=current.snapshot.id,
+            )
+        return note_markdown
+
     def update_workspace_config(self, request: UpdateWorkspaceConfigRequest) -> WorkspaceEnvelope:
         current = self.current()
         workspace = WorkspaceDocument.model_validate(deepcopy(current.workspace.model_dump()))

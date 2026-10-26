@@ -18,6 +18,20 @@ class RepositoryGraphTests(unittest.TestCase):
         self.addCleanup(tempdir.cleanup)
         self.repository = GraphRepository(Path(tempdir.name) / "state.sqlite3")
 
+    def test_topic_note_survives_restart_without_changing_artifacts(self) -> None:
+        graph = self.repository.current().workspace.graphs[0]
+        topic = graph.topics[0]
+        original_artifacts = list(topic.artifacts)
+        markdown = "# Minha nota\n\nReferência a [[outro tópico]]."
+
+        saved = self.repository.update_topic_note(graph.graph_id, topic.id, markdown)
+        reopened = GraphRepository(self.repository._db_path).graph(graph.graph_id)
+        persisted = next(item for item in reopened.topics if item.id == topic.id)
+
+        self.assertEqual(saved, markdown)
+        self.assertEqual(persisted.note_markdown, markdown)
+        self.assertEqual(persisted.artifacts, original_artifacts)
+
     def test_learning_profile_survives_restart_without_replacing_graphs(self) -> None:
         graph_ids = [graph.graph_id for graph in self.repository.current().workspace.graphs]
         profile = LearnerProfile(

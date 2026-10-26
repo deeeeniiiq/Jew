@@ -1193,6 +1193,27 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
     await loadSnapshots();
   }
 
+  async function saveTopicNote(topicId: string, noteMarkdown: string): Promise<void> {
+    if (!activeGraph) return;
+    const graphId = activeGraph.graph_id;
+    const response = await apiFetch(`${API_BASE}/api/v1/workspace/graphs/${graphId}/topics/${topicId}/note`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note_markdown: noteMarkdown }),
+    });
+    if (!response.ok) throw new Error(await readErrorMessage(response, "Não foi possível salvar a nota."));
+    setData((current) => current ? {
+      ...current,
+      workspace: {
+        ...current.workspace,
+        graphs: current.workspace.graphs.map((graph) => graph.graph_id === graphId ? {
+          ...graph,
+          topics: graph.topics.map((topic) => topic.id === topicId ? { ...topic, note_markdown: noteMarkdown } : topic),
+        } : graph),
+      },
+    } : current);
+  }
+
   async function submitQuiz(answersOverride?: Record<string, number>): Promise<void> {
     if (!quizSession) return;
     const requestId = ++quizRequestRef.current;
@@ -1484,6 +1505,7 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
         topicDetails={{
           addTopicResource,
           addTopicArtifact,
+          saveTopicNote,
           generateLesson,
           lessonLoading,
           lessonError,

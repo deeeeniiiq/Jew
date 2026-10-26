@@ -10,13 +10,16 @@ Atualizado em 26/10/2026. Este documento distingue implementação de validaçã
 - O perfil inclui horas de estudo semanais e preferências de aprendizagem. Esses dados são enviados como contexto para a geração de roadmap. A edição fica em Configurações.
 - O modal de onboarding e criação de roadmap usa uma paleta escura de superfícies neutras, texto claro e mostarda, com adaptação ao tema claro.
 - Foi criado o repositório público `deeeeniiiq/Jew`; o remoto do projeto original continua separado.
+- Ao selecionar um tópico no mapa, o JEW abre diretamente o espaço de estudo escuro com biblioteca pesquisável, notas Markdown em dois painéis, prévia e relações. O antigo painel flutuante do tópico deixou de aparecer.
+- As notas são persistidas por tópico em snapshots SQLite. Fontes, materiais, aulas, avaliação e histórico permanecem acessíveis no espaço de estudo.
 
 ## Evidências
 
-- Frontend: 179 testes em 31 arquivos; verificação de tipos, localização e build de produção aprovados.
-- Backend: 294 testes aprovados, incluindo persistência do perfil após reabrir o repositório SQLite.
-- Desktop: 22 testes aprovados antes das alterações de perfil; nenhuma distribuição Windows foi empacotada nesta etapa.
+- Frontend: 180 testes em 32 arquivos; verificação de tipos e build de produção aprovados. A verificação de localização foi aprovada na etapa anterior.
+- Backend: 297 testes aprovados, incluindo persistência do perfil e das notas após reabrir o repositório SQLite.
+- Desktop: 22 testes aprovados; nenhuma distribuição Windows foi empacotada nesta etapa.
 - Capturas com backend e banco temporários: [onboarding novo](validation/jew-onboarding.png) e [workspace com roadmap 2D](validation/jew-roadmap-2d.png). São verificações visuais em 1280 × 900, não substituem testes de interação no desktop.
+- A persistência da nota foi verificada após reabrir SQLite e por contrato HTTP; tipo, build e teste do componente novo passaram. A nova tela ainda não foi revisada visualmente no aplicativo desktop.
 
 ## Verificação parcial
 
@@ -29,7 +32,7 @@ Atualizado em 26/10/2026. Este documento distingue implementação de validaçã
 | Prioridade | Entrega | Dependência | Manutenção | Benefício |
 | --- | --- | --- | --- | --- |
 | Alta | Pesquisa profunda com evidências, comparação e cancelamento | Contrato de fontes e adaptadores de busca | Alta | Evita trilhas inventadas |
-| Alta | Edição de nós, vínculos e notas com autosave e desfazer/refazer | Modelo persistente e histórico de operações | Alta | Faz do roadmap um espaço de trabalho real |
+| Alta | Edição de nós e vínculos com desfazer/refazer; aprofundar o editor de notas | Operações, anexos e histórico | Alta | Faz do roadmap um espaço de trabalho real |
 | Alta | Testes funcionais desktop e revisão de acessibilidade do Canvas | Ambiente Windows de validação | Média | Confiança nas interações centrais |
 | Média | Chats contextuais independentes por tópico | Persistência e controle de contexto | Média | Ajuda diretamente durante o estudo |
 | Média | Desafios, evidência de competência e Projetos possíveis | Critérios objetivos e registro de tentativas | Alta | Mede aplicação do conhecimento |

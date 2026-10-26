@@ -29,6 +29,10 @@ class TopicArtifactInput(BaseModel):
     body: str = Field(min_length=1, max_length=12000)
 
 
+class TopicNoteInput(BaseModel):
+    note_markdown: str = Field(max_length=200000)
+
+
 class LessonGenerateRequest(BaseModel):
     """Generate a local lesson. The chosen model must be installed in Ollama."""
 
