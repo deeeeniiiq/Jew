@@ -1,7 +1,36 @@
 import { describe, expect, it } from "vitest";
 
-import { buildAnchorMap, buildZoneContour, edgeRenderMotion, idleRenderOffset, nextIdleMotionState, zoneIdByTopicId } from "./graphCanvasCore";
+import { buildAnchorMap, buildZoneContour, cardBounds, cardEdgeAnchor, cardOverlap, cardSize, cardTitleLines, edgeRenderMotion, idleRenderOffset, nextIdleMotionState, pointInCard, zoneIdByTopicId } from "./graphCanvasCore";
 import type { Zone } from "../lib/types";
+
+describe("roadmap cards", () => {
+  const basic = { id: "a", title: "Fundamentos", state: "not_started" as const, level: 1 };
+  it("keeps the title inside a sized card and uses its whole face for hit testing", () => {
+    const size = cardSize(basic);
+    expect(size.width).toBeGreaterThan(size.height);
+    expect(pointInCard({ x: 105, y: 0 }, { x: 0, y: 0 }, size)).toBe(true);
+    expect(pointInCard({ x: 106, y: 0 }, { x: 0, y: 0 }, size)).toBe(false);
+    expect(cardBounds({ x: 0, y: 0 }, size).top).toBe(-size.height / 2);
+    const long = { ...basic, title: "Fundamentos de engenharia de software aplicada" };
+    expect(cardSize(long).height).toBeGreaterThan(size.height);
+    expect(cardTitleLines(long.title).length).toBe(2);
+  });
+
+  it("anchors edges on the visible boundary in every direction", () => {
+    const size = { width: 200, height: 60 };
+    expect(cardEdgeAnchor({ x: 0, y: 0 }, size, { x: 400, y: 0 })).toEqual({ x: 100, y: 0 });
+    expect(cardEdgeAnchor({ x: 0, y: 0 }, size, { x: 0, y: -400 })).toEqual({ x: 0, y: -30 });
+    expect(cardEdgeAnchor({ x: 0, y: 0 }, size, { x: 100, y: 100 })).toEqual({ x: 30, y: 30 });
+    expect(cardEdgeAnchor({ x: 0, y: 0 }, size, { x: 0, y: 0 })).toEqual({ x: 100, y: 0 });
+  });
+
+  it("detects overlap with spacing without depending on zoom", () => {
+    const size = { width: 180, height: 48 };
+    expect(cardOverlap({ x: 0, y: 0 }, size, { x: 190, y: 0 }, size)).toBeNull();
+    expect(cardOverlap({ x: 0, y: 0 }, size, { x: 190, y: 0 }, size, 20)).toEqual({ x: 10, y: 68 });
+    expect(cardOverlap({ x: 0, y: 0 }, size, { x: 0, y: 0 }, size)?.x).toBe(180);
+  });
+});
 
 describe("overlapping zones", () => {
   it("prefers the smallest zone, then strongest intensity, retaining first-on-tie order", () => {

@@ -44,6 +44,61 @@ export type LabelBox = {
   bottom: number;
 };
 
+export type CardSize = { width: number; height: number };
+export type GraphPoint = { x: number; y: number };
+
+// Canvas coordinates always describe the centre of a topic. Keep that contract for saved layouts.
+export function cardSize(node: GraphNode): CardSize {
+  return { width: node.level <= 1 ? 210 : 188, height: node.title.length > 29 ? 62 : 48 };
+}
+
+export function cardBounds(point: GraphPoint, size: CardSize, padding = 0): LabelBox {
+  return {
+    left: point.x - size.width / 2 - padding,
+    right: point.x + size.width / 2 + padding,
+    top: point.y - size.height / 2 - padding,
+    bottom: point.y + size.height / 2 + padding,
+  };
+}
+
+export function pointInCard(point: GraphPoint, center: GraphPoint, size: CardSize): boolean {
+  const box = cardBounds(center, size);
+  return point.x >= box.left && point.x <= box.right && point.y >= box.top && point.y <= box.bottom;
+}
+
+export function cardOverlap(a: GraphPoint, aSize: CardSize, b: GraphPoint, bSize: CardSize, gap = 0): { x: number; y: number } | null {
+  const x = (aSize.width + bSize.width) / 2 + gap - Math.abs(a.x - b.x);
+  const y = (aSize.height + bSize.height) / 2 + gap - Math.abs(a.y - b.y);
+  return x > 0 && y > 0 ? { x, y } : null;
+}
+
+export function cardEdgeAnchor(center: GraphPoint, size: CardSize, toward: GraphPoint): GraphPoint {
+  // A stable direction avoids NaN and invisible edges when two positions coincide.
+  const dx = toward.x - center.x;
+  const dy = toward.y - center.y;
+  if (dx === 0 && dy === 0) return { x: center.x + size.width / 2, y: center.y };
+  const scale = Math.min(dx === 0 ? Infinity : size.width / (2 * Math.abs(dx)), dy === 0 ? Infinity : size.height / (2 * Math.abs(dy)));
+  return { x: center.x + dx * scale, y: center.y + dy * scale };
+}
+
+export function cardTitleLines(title: string, maxCharacters = 26): string[] {
+  const words = title.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return [""];
+  const lines: string[] = [];
+  let line = "";
+  for (const word of words) {
+    const candidate = line ? `${line} ${word}` : word;
+    if (candidate.length <= maxCharacters) line = candidate;
+    else {
+      if (line) lines.push(line);
+      line = word;
+    }
+  }
+  if (line) lines.push(line);
+  if (lines.length <= 2) return lines.map((value) => value.length <= maxCharacters ? value : `${value.slice(0, maxCharacters - 1)}…`);
+  return [lines[0], `${lines.slice(1).join(" ").slice(0, maxCharacters - 1)}…`];
+}
+
 export type ZoneGeometry = {
   center: { x: number; y: number };
   spread: number;

@@ -8,6 +8,11 @@ import {
   averageAngles,
   buildAnchorMap,
   buildZoneContour,
+  cardBounds,
+  cardEdgeAnchor,
+  cardOverlap,
+  cardSize,
+  cardTitleLines,
   cacheEntryKey,
   clamp,
   cloneManualNodePositions,
@@ -17,24 +22,18 @@ import {
   hexToRgb,
   highlightedZoneIdsForSelection,
   idleRenderOffset,
-  intersectsAny,
-  labelCandidateOrder,
-  labelSpreadRadius,
   mixRgb,
-  nodeFillColor,
-  nodeRadius,
   nextIdleMotionState,
   normalizeAngle,
+  pointInCard,
   primaryZoneIdForTopic,
   positionCache,
   rgbaString,
   savePositionCache,
-  withinBounds,
   zoneIdByTopicId,
   type GraphCanvasPalette,
   type GraphCanvasThemeMode,
   type GraphNode,
-  type LabelBox,
   type ManualNodePositions,
   type NodeAnchor,
   type NodePosition,
@@ -147,17 +146,22 @@ function advanceActivePhysicsFrame({
         const sameZone = aZone && bZone && aZone === bZone;
         const zoneSize = sameZone ? (zoneSizeById.get(aZone) ?? 1) : 1;
         const densityBoost = sameZone ? 1 + Math.sqrt(Math.max(0, zoneSize - 4)) * 0.4 : 1;
-        const collisionMinDist = Math.max(160, (labelSpreadRadius(aNode) + labelSpreadRadius(bNode)) * 0.95) * densityBoost;
+        const overlap = cardOverlap(a, cardSize(aNode), b, cardSize(bNode), 20 * densityBoost);
+        const collisionMinDist = 150 * densityBoost;
         const dx = a.x - b.x;
         const dy = a.y - b.y;
         const rawD2 = dx * dx + dy * dy;
         const d2 = Math.max(rawD2, collisionMinDist * collisionMinDist);
         const dist = Math.sqrt(rawD2) || 1;
+        const seed = rawD2 < 0.0001 ? hashString(`${aNode.id}:${bNode.id}`) : 0;
+        const directionX = rawD2 < 0.0001 ? (seed % 2 === 0 ? 1 : -1) : dx / dist;
+        const directionY = rawD2 < 0.0001 ? ((seed >> 1) % 2 === 0 ? 0.35 : -0.35) : dy / dist;
         const branchMultiplier = aAnchor?.primaryRootId !== bAnchor?.primaryRootId ? 1.2 : 1;
         const sameZoneBoost = sameZone && zoneSize > 6 ? 1 + (zoneSize - 6) * 0.08 : 1;
         const force = (repulsion * branchMultiplier * sameZoneBoost * forceScale) / d2;
-        const fx = (dx / dist) * force;
-        const fy = (dy / dist) * force;
+        const collisionForce = overlap ? Math.min(7, Math.min(overlap.x, overlap.y) * 0.11) : 0;
+        const fx = directionX * (force + collisionForce);
+        const fy = directionY * (force + collisionForce);
         if (!aPinned) {
           a.vx += fx;
           a.vy += fy;
@@ -1031,17 +1035,16 @@ function GraphCanvasComponent({
           const position = positions.get(node.id);
           const stable = anchors.get(node.id);
           if (!position || !stable) continue;
-          position.x = stable.x;
-          position.y = stable.y;
+          const manual = manualPositionsRef.current?.[node.id];
+          position.x = manual?.x ?? stable.x;
+          position.y = manual?.y ?? stable.y;
           position.vx = 0;
           position.vy = 0;
-          const labelRadius = labelSpreadRadius(node);
-          const horizontalPad = Math.max(52, Math.min(168, labelRadius * 1.06));
-          const verticalPad = Math.max(38, Math.min(88, labelRadius * 0.48));
-          minX = Math.min(minX, position.x - horizontalPad);
-          maxX = Math.max(maxX, position.x + horizontalPad);
-          minY = Math.min(minY, position.y - verticalPad);
-          maxY = Math.max(maxY, position.y + verticalPad);
+          const bounds = cardBounds(position, cardSize(node), 14);
+          minX = Math.min(minX, bounds.left);
+          maxX = Math.max(maxX, bounds.right);
+          minY = Math.min(minY, bounds.top);
+          maxY = Math.max(maxY, bounds.bottom);
         }
 
         if (currentNodes.length > 0 && Number.isFinite(minX) && Number.isFinite(maxX) && Number.isFinite(minY) && Number.isFinite(maxY)) {
@@ -1126,7 +1129,6 @@ function GraphCanvasComponent({
       ctx2.translate(width / 2, height / 2);
       ctx2.scale(zoom, zoom);
       ctx2.translate(-width / 2 + panOffsetRef.current.x, -height / 2 + panOffsetRef.current.y);
-      const renderIdleFrozen = disableIdleAnimationsRef.current && idleFrozenRef.current;
 
       drawZoneBackgrounds(width, height);
 
@@ -1170,6 +1172,7 @@ function GraphCanvasComponent({
       const bundleMetaByEdgeId = new Map<string, { angle: number; laneOffset: number; laneCount: number }>();
 
       const outgoingBySource = new Map<string, Array<{ edge: Edge; angle: number }>>();
+      const visibleNodeById = new Map(currentNodes.map((node) => [node.id, node]));
       for (const edge of currentEdges) {
         const from = edgePositions.get(edge.source_topic_id);
         const to = edgePositions.get(edge.target_topic_id);
@@ -1216,23 +1219,28 @@ function GraphCanvasComponent({
         const targetZoneId = zoneByTopicId.get(edge.target_topic_id) ?? null;
         const highlightedSourceZone = sourceZoneId && selectedZoneIds.has(sourceZoneId) ? zoneById.get(sourceZoneId) ?? null : null;
         const highlightedTargetZone = targetZoneId && selectedZoneIds.has(targetZoneId) ? zoneById.get(targetZoneId) ?? null : null;
-        const targetX = from.x + (to.x - from.x) * edgeBrightness;
-        const targetY = from.y + (to.y - from.y) * edgeBrightness;
+        const sourceNode = visibleNodeById.get(edge.source_topic_id);
+        const targetNode = visibleNodeById.get(edge.target_topic_id);
+        if (!sourceNode || !targetNode) continue;
+        const start = cardEdgeAnchor(from, cardSize(sourceNode), to);
+        const destination = cardEdgeAnchor(to, cardSize(targetNode), from);
+        const targetX = start.x + (destination.x - start.x) * edgeBrightness;
+        const targetY = start.y + (destination.y - start.y) * edgeBrightness;
         const bundleMeta = bundleMetaByEdgeId.get(edge.id);
         const bundleAngle = bundleMeta?.angle ?? Math.atan2(targetY - from.y, targetX - from.x);
         const bundleDist = Math.max(16, Math.min(46, Math.hypot(targetX - from.x, targetY - from.y) * 0.24));
         const laneOffset = bundleMeta?.laneOffset ?? 0;
         const perpX = -Math.sin(bundleAngle);
         const perpY = Math.cos(bundleAngle);
-        const startControlX = from.x + Math.cos(bundleAngle) * bundleDist + perpX * laneOffset;
-        const startControlY = from.y + Math.sin(bundleAngle) * bundleDist + perpY * laneOffset;
+        const startControlX = start.x + Math.cos(bundleAngle) * bundleDist + perpX * laneOffset;
+        const startControlY = start.y + Math.sin(bundleAngle) * bundleDist + perpY * laneOffset;
         const targetAngle = Math.atan2(targetY - from.y, targetX - from.x);
         const endBundleDist = Math.max(10, Math.min(34, Math.hypot(targetX - from.x, targetY - from.y) * 0.18));
         const endControlX = targetX - Math.cos(targetAngle) * endBundleDist + perpX * laneOffset * 0.24;
         const endControlY = targetY - Math.sin(targetAngle) * endBundleDist + perpY * laneOffset * 0.24;
 
         ctx2.beginPath();
-        ctx2.moveTo(from.x, from.y);
+        ctx2.moveTo(start.x, start.y);
         if (curvedEdgeLinesEnabledRef.current) {
           ctx2.bezierCurveTo(startControlX, startControlY, endControlX, endControlY, targetX, targetY);
         } else {
@@ -1269,225 +1277,59 @@ function GraphCanvasComponent({
         }
       }
 
-      const frontierSourcesByTarget = new Map<string, NodePosition[]>();
-      for (const edge of currentEdges) {
-        if (!frontierEdgeIdsRef.current.has(edge.id)) continue;
-        const position = edgePositions.get(edge.source_topic_id);
-        if (!position) continue;
-        const sources = frontierSourcesByTarget.get(edge.target_topic_id);
-        if (sources) sources.push(position);
-        else frontierSourcesByTarget.set(edge.target_topic_id, [position]);
-      }
       for (const node of currentNodes) {
         const position = renderPositions.get(node.id);
         if (!position) continue;
         const litFrame = litFrameRef.current.get(node.id);
         const fadeRate = Math.max(18, cascadeStepFramesRef.current * 1.5);
         const brightness = litFrame === undefined ? 0 : Math.min(1, Math.max(0, (frameCount - litFrame) / fadeRate));
+        if (brightness < 0.02) continue;
         const selected = selectedTopicIdRef.current === node.id;
         const onPath = pathNodeIdsRef.current.has(node.id);
         const contextual = ancestorIdsRef.current.has(node.id);
         const isRoot = rootIdsRef.current.has(node.id);
-        const nodeZoneId = zoneByTopicId.get(node.id) ?? null;
-        const effectiveZoneId = selected && selectedPrimaryZoneId ? selectedPrimaryZoneId : nodeZoneId;
-        const highlightedZone = (selected || onPath) && effectiveZoneId && selectedZoneIds.has(effectiveZoneId)
-          ? zoneById.get(effectiveZoneId) ?? null
-          : null;
-        const highlightedZoneRgb = highlightedZone ? hexToRgb(highlightedZone.color) : null;
-        const r = nodeRadius(node, selected, onPath, isRoot);
-        const haloPulse = renderIdleFrozen ? 0.55 : 0.55 + Math.sin(frameCount * 0.04 + position.x * 0.008) * 0.07;
-        const frontierSources = frontierSourcesByTarget.get(node.id) ?? [];
-
-        if (brightness > 0.06 && (selected || onPath)) {
-          if (themeModeRef.current === "light" && highlightedZoneRgb) {
-            ctx2.strokeStyle = rgbaString(highlightedZoneRgb, selected ? Math.max(0.72, haloPulse * brightness) : Math.max(0.52, 0.62 * brightness));
-          } else if (themeModeRef.current === "light") {
-            // No zone in light theme — inherit halo colour from the node fill so it reads as part of the point, not a grey ring.
-            const haloRgb = selected ? "217,119,87" : "128,104,78";
-            ctx2.strokeStyle = selected
-              ? `rgba(${haloRgb},${Math.max(0.72, haloPulse * brightness)})`
-              : `rgba(${haloRgb},${Math.max(0.52, 0.62 * brightness)})`;
-          } else {
-            ctx2.strokeStyle = selected
-              ? `rgba(${paletteRef.current.edgeRgb},${haloPulse * brightness})`
-              : `rgba(${paletteRef.current.edgeRgb},${0.24 * brightness})`;
-          }
-          ctx2.lineWidth = selected ? 1.35 : 1;
-          ctx2.beginPath();
-          ctx2.arc(position.x, position.y, r + (selected ? 8 : 6), 0, Math.PI * 2);
-          ctx2.stroke();
-        } else if (brightness > 0.06 && frontierSources.length > 0) {
-          const averageSource = frontierSources.reduce(
-            (acc, source) => ({ x: acc.x + source.x, y: acc.y + source.y }),
-            { x: 0, y: 0 },
-          );
-          averageSource.x /= frontierSources.length;
-          averageSource.y /= frontierSources.length;
-          const angle = Math.atan2(averageSource.y - position.y, averageSource.x - position.x);
-          ctx2.strokeStyle = `rgba(${paletteRef.current.frontierRgb},${0.52 * brightness})`;
-          ctx2.lineWidth = 1.35;
-          ctx2.beginPath();
-          ctx2.arc(position.x, position.y, r + 4, angle - 0.54, angle + 0.54);
-          ctx2.stroke();
-        } else if (brightness > 0.06 && (node.state === "needs_review" || node.state === "shaky")) {
-          ctx2.setLineDash([4, 6]);
-          ctx2.shadowBlur = 12;
-          ctx2.shadowColor = `rgba(${paletteRef.current.reviewRingRgb},0.6)`;
-          ctx2.strokeStyle = `rgba(${paletteRef.current.reviewRingRgb},${0.7 * brightness})`;
-          ctx2.lineWidth = 1.2;
-          ctx2.beginPath();
-          ctx2.arc(position.x, position.y, r + 8, 0, Math.PI * 2);
-          ctx2.stroke();
-          ctx2.setLineDash([]);
-          ctx2.shadowBlur = 0;
-        } else if (brightness > 0.06 && isRoot) {
-          ctx2.setLineDash([4, 6]);
-          ctx2.strokeStyle = `rgba(${paletteRef.current.edgeRgb},${0.14 * brightness})`;
-          ctx2.lineWidth = 1;
-          ctx2.beginPath();
-          ctx2.arc(position.x, position.y, r + 8, 0, Math.PI * 2);
-          ctx2.stroke();
-          ctx2.setLineDash([]);
-        } else if (brightness > 0.06 && themeModeRef.current === "light" && highlightedZoneRgb) {
-          ctx2.strokeStyle = rgbaString(highlightedZoneRgb, selected ? 0.9 : onPath ? 0.72 : 0.52);
-          ctx2.lineWidth = selected ? 1.8 : 1.35;
-          ctx2.beginPath();
-          ctx2.arc(position.x, position.y, r + 5, 0, Math.PI * 2);
-          ctx2.stroke();
-        }
-
-        ctx2.fillStyle = paletteRef.current.nodeBaseFill;
+        const zone = zoneById.get(zoneByTopicId.get(node.id) ?? "");
+        const size = cardSize(node);
+        const bounds = cardBounds(position, size);
+        const light = themeModeRef.current === "light";
+        const mastered = node.state === "mastered" || node.state === "solid";
+        const reviewing = node.state === "needs_review" || node.state === "shaky";
+        const learning = node.state === "learning";
+        const accent = selected ? "#D9AD45" : reviewing ? "#C98574" : mastered ? "#8CB9A0"
+          : learning ? "#7096B7" : onPath ? "#D6C3A3" : zone?.color ?? (light ? "#86634A" : "#786F63");
+        const fill = light
+          ? selected ? "#FFF5DE" : mastered ? "#E8F1E9" : learning ? "#EAF0F4" : reviewing ? "#F8ECE8" : "#F8F5EF"
+          : selected ? "#2C2519" : mastered ? "#1B2922" : learning ? "#1B2730" : reviewing ? "#2C211E" : "#1A1A19";
+        ctx2.save();
+        ctx2.globalAlpha = Math.max(0.12, brightness);
         ctx2.beginPath();
-        ctx2.arc(position.x, position.y, r, 0, Math.PI * 2);
+        ctx2.roundRect(bounds.left, bounds.top, size.width, size.height, 5);
+        ctx2.fillStyle = fill;
         ctx2.fill();
-
-        ctx2.globalAlpha = themeModeRef.current === "light" ? Math.max(0.34, brightness) : brightness;
-        ctx2.shadowBlur = selected ? 14 : onPath ? 8 : contextual ? 4 : 0;
-        ctx2.shadowColor = selected
-          ? paletteRef.current.shadowSelected
-          : onPath
-            ? paletteRef.current.shadowPath
-            : paletteRef.current.shadowContext;
-        if (themeModeRef.current === "light" && highlightedZoneRgb) {
-          const zoneTint = selected ? 0.78 : onPath ? 0.62 : 0.46;
-          ctx2.fillStyle = rgbaString(highlightedZoneRgb, zoneTint);
-        } else {
-          ctx2.fillStyle = nodeFillColor(node, selected, onPath, paletteRef.current);
-        }
-        ctx2.beginPath();
-        ctx2.arc(position.x, position.y, r, 0, Math.PI * 2);
-        ctx2.fill();
-        ctx2.globalAlpha = 1;
-        ctx2.shadowBlur = 0;
-      }
-
-      const placedLabels: LabelBox[] = [];
-      const labelNodes = [...currentNodes].sort((left, right) => {
-        const leftScore = (selectedTopicIdRef.current === left.id ? 100 : 0) + (pathNodeIdsRef.current.has(left.id) ? 10 : 0) + (ancestorIdsRef.current.has(left.id) ? 1 : 0);
-        const rightScore =
-          (selectedTopicIdRef.current === right.id ? 100 : 0) + (pathNodeIdsRef.current.has(right.id) ? 10 : 0) + (ancestorIdsRef.current.has(right.id) ? 1 : 0);
-        return rightScore - leftScore;
-      });
-
-      ctx2.save();
-      ctx2.font = "10px 'Berkeley Mono', 'JetBrains Mono', monospace";
-      ctx2.textAlign = "center";
-      ctx2.textBaseline = "middle";
-
-      for (const node of labelNodes) {
-        const position = renderPositions.get(node.id);
-        const anchor = anchors.get(node.id);
-        if (!position || !anchor) continue;
-        const selected = selectedTopicIdRef.current === node.id;
-        // Skip canvas label for the selected topic — the popover already shows its title
-        // and a duplicated canvas label tends to collide with the popover body.
-        if (selected) continue;
-        const onPath = pathNodeIdsRef.current.has(node.id);
-        const contextual = ancestorIdsRef.current.has(node.id);
-        const isRoot = rootIdsRef.current.has(node.id);
-        const litFrame = litFrameRef.current.get(node.id);
-        const fadeRate = Math.max(18, cascadeStepFramesRef.current * 1.5);
-        const brightness = litFrame === undefined ? 0 : Math.min(1, Math.max(0, (frameCount - litFrame) / fadeRate));
-        if (brightness < 0.1) continue;
-        const radius = nodeRadius(node, selected, onPath, isRoot);
-        const alpha = (selected ? 0.96 : onPath ? 0.76 : contextual ? 0.48 : 0.22) * brightness;
-        const textWidth = ctx2.measureText(node.title).width;
-        const candidates = [
-          { x: position.x, y: position.y - radius - 12 },
-          { x: position.x, y: position.y + radius + 12 },
-          { x: position.x - radius - 10, y: position.y },
-          { x: position.x + radius + 10, y: position.y },
-          { x: position.x, y: position.y - radius - 24 },
-          { x: position.x, y: position.y + radius + 24 },
-        ];
-        const cachedIndex = labelPlacementRef.current.get(node.id);
-        const preferredOrder = labelCandidateOrder();
-        // Try the cached label slot first to reduce placement oscillation.
-        const order =
-          cachedIndex === undefined
-            ? preferredOrder
-            : [cachedIndex, ...preferredOrder.filter((index) => index !== cachedIndex)];
-
-        let chosenIndex = order[0] ?? 0;
-        let chosen = candidates[chosenIndex];
-        let chosenBox: LabelBox = {
-          left: chosen.x - textWidth / 2 - 4,
-          right: chosen.x + textWidth / 2 + 4,
-          top: chosen.y - 8,
-          bottom: chosen.y + 8,
-        };
-
-        for (const candidateIndex of order) {
-          const candidate = candidates[candidateIndex];
-          const nextBox: LabelBox = {
-            left: candidate.x - textWidth / 2 - 4,
-            right: candidate.x + textWidth / 2 + 4,
-            top: candidate.y - 8,
-            bottom: candidate.y + 8,
-          };
-          if (withinBounds(nextBox, width, height) && !intersectsAny(nextBox, placedLabels)) {
-            chosenIndex = candidateIndex;
-            chosen = candidate;
-            chosenBox = nextBox;
-            break;
-          }
-        }
-
-        labelPlacementRef.current.set(node.id, chosenIndex);
-        if (themeModeRef.current === "light" && (selected || onPath)) {
-          chosen = { ...chosen, y: chosen.y - 2 };
-          chosenBox = {
-            left: chosenBox.left,
-            right: chosenBox.right,
-            top: chosenBox.top - 2,
-            bottom: chosenBox.bottom - 2,
-          };
-        }
-        placedLabels.push(chosenBox);
-        const nodeZoneId = zoneByTopicId.get(node.id) ?? null;
-        const effectiveZoneId = selected && selectedPrimaryZoneId ? selectedPrimaryZoneId : nodeZoneId;
-        const highlightedZone = (selected || onPath) && effectiveZoneId && selectedZoneIds.has(effectiveZoneId)
-          ? zoneById.get(effectiveZoneId) ?? null
-          : null;
-        const highlightedZoneRgb = highlightedZone ? hexToRgb(highlightedZone.color) : null;
-        if (themeModeRef.current === "light" && highlightedZoneRgb && (selected || onPath)) {
-          // Use an opaque cream chip so grid and edges do not bleed through selected labels.
-          const labelBg = mixRgb(highlightedZoneRgb, { r: 255, g: 255, b: 255 }, 0.9);
-          ctx2.beginPath();
-          ctx2.roundRect(chosenBox.left - 4, chosenBox.top - 3, chosenBox.right - chosenBox.left + 8, chosenBox.bottom - chosenBox.top + 6, 10);
-          ctx2.fillStyle = rgbaString(labelBg, 1);
-          ctx2.fill();
+        ctx2.lineWidth = selected ? 2 : onPath ? 1.5 : 1;
+        ctx2.strokeStyle = selected || onPath || reviewing || mastered || learning
+          ? accent : light ? "#C9C2B8" : "#47433C";
+        ctx2.stroke();
+        ctx2.fillStyle = accent;
+        ctx2.fillRect(bounds.left + 1, bounds.top + 7, 3, size.height - 14);
+        if (isRoot) ctx2.fillRect(bounds.left + 14, bounds.top + 9, 6, 2);
+        const lines = cardTitleLines(node.title, size.width >= 200 ? 29 : 26);
+        ctx2.font = selected || isRoot
+          ? "600 12px 'Inter', 'IBM Plex Sans', sans-serif"
+          : "500 12px 'Inter', 'IBM Plex Sans', sans-serif";
+        ctx2.textAlign = "left";
+        ctx2.textBaseline = "middle";
+        ctx2.fillStyle = light ? "#26231F" : "#F0EBE1";
+        const lineHeight = 16;
+        const firstY = position.y - (lines.length - 1) * lineHeight / 2;
+        lines.forEach((line, index) => ctx2.fillText(line, bounds.left + 17, firstY + index * lineHeight, size.width - 29));
+        if (contextual && !selected && !onPath) {
+          ctx2.strokeStyle = light ? "rgba(112,150,183,0.55)" : "rgba(112,150,183,0.65)";
           ctx2.lineWidth = 1;
-          ctx2.strokeStyle = rgbaString(highlightedZoneRgb, Math.min(0.88, 0.6 + alpha * 0.28));
-          ctx2.stroke();
-          ctx2.fillStyle = rgbaString(highlightedZoneRgb, Math.min(0.96, 0.74 + alpha * 0.22));
-        } else {
-          ctx2.fillStyle = `rgba(${paletteRef.current.labelRgb},${alpha})`;
+          ctx2.strokeRect(bounds.left + 4, bounds.top + 4, size.width - 8, size.height - 8);
         }
-        ctx2.fillText(node.title, chosen.x, chosen.y);
+        ctx2.restore();
       }
-
-      ctx2.restore();
 
       for (const zone of zonesDataRef.current) {
         if (!selectedZoneIds.has(zone.id)) continue;
@@ -1612,9 +1454,9 @@ function GraphCanvasComponent({
         const dx = position.x - canvasX;
         const dy = position.y - canvasY;
         const d2 = dx * dx + dy * dy;
-        if (!best || d2 < best.d2) best = { id: node.id, d2 };
+        if (pointInCard({ x: canvasX, y: canvasY }, position, cardSize(node)) && (!best || d2 < best.d2)) best = { id: node.id, d2 };
       }
-      if (best && best.d2 < 28 * 28) {
+      if (best) {
         const position = nodesRef.current.get(best.id);
         if (position) {
           draggedNodeRef.current = {
@@ -1747,9 +1589,9 @@ function GraphCanvasComponent({
         const dx = position.x - canvasX;
         const dy = position.y - canvasY;
         const d2 = dx * dx + dy * dy;
-        if (!best || d2 < best.d2) best = { id: node.id, d2 };
+        if (pointInCard({ x: canvasX, y: canvasY }, position, cardSize(node)) && (!best || d2 < best.d2)) best = { id: node.id, d2 };
       }
-      if (best && best.d2 < 25 * 25) {
+      if (best) {
         const rect = containerRef.current?.getBoundingClientRect();
         const position = nodesRef.current.get(best.id);
         if (rect && position) {
